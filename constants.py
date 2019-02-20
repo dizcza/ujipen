@@ -4,6 +4,7 @@ WIDTH = 200
 HEIGHT = 200
 
 PATTERN_SIZE = 50
+ASPECT_RATIO_MAX = 4
 
 POINTS_DIR = Path("points")
 IMAGES_DIR = Path("images")
