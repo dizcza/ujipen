@@ -6,14 +6,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from constants import POINTS_DIR, CHAR_PATTERNS_H, CHAR_PATTERNS_C, WIDTH, HEIGHT, PATTERN_SIZE, ASPECT_RATIO_MAX
+from dtw_solver import l2_dist, dtw_vanilla, dtw_online, dtw_vectorized
 
 SCREEN_CENTER = HEIGHT / 2, WIDTH / 2
-
-
-def l2_dist(x, y):
-    axis = 1 if max(x.ndim, y.ndim) > 1 else None
-    return np.sum((x - y) ** 2, axis=axis)
-
 
 H_FILE_HEADER = f"""/*
  * char_patterns.h
@@ -158,40 +153,6 @@ def convert_to_c(dtype='float32_t', separate=True):
     print(f"Saved to {CHAR_PATTERNS_H.parent}")
 
 
-def dtw_vanilla(sample, pattern):
-    dist_matrix = np.zeros((len(sample) + 1, len(pattern) + 1))
-    dist_matrix[0, 1:] = np.inf
-    dist_matrix[1:, 0] = np.inf
-    for i, s in enumerate(sample, start=1):
-        for j, p in enumerate(pattern, start=1):
-            cost = l2_dist(s, p)
-            insertion = dist_matrix[i - 1, j]
-            deletion = dist_matrix[i, j - 1]
-            match = dist_matrix[i - 1, j - 1]
-            dist_matrix[i, j] = cost + min(insertion, deletion, match)
-    dist_matrix = dist_matrix[1:, 1:]
-    return dist_matrix
-
-
-def dtw_online(sample, pattern):
-    n = len(pattern) + 2
-    dist_top = np.repeat(np.inf, n)
-    dist_top[1] = 0
-    k = 0  # declare k with any value
-    for i, s in enumerate(sample, start=1):
-        for j, p in enumerate(pattern, start=1):
-            cost = l2_dist(s, p)
-            k = (j - i + 1) % n
-            insertion = dist_top[(k + 1) % n]
-            deletion = dist_top[(k - 1) % n]
-            match = dist_top[k]
-            dist_top[k] = cost + min(insertion, deletion, match)
-        dist_top[(k + 1) % n] = np.inf
-        assert np.isinf(dist_top).sum() == 2
-    dist_answer = dist_top[k]
-    return dist_answer
-
-
 def dtw_test():
     np.random.seed(26)
     points = {}
@@ -216,10 +177,11 @@ def my_dtw_test():
         sample = np.random.randn(100, 2)
         pattern = np.random.randn(100, 2)
         dist_online = dtw_online(sample, pattern)
-        dist_matrix = dtw_vanilla(sample, pattern)
+        # dist_matrix = dtw_vanilla(sample, pattern)
+        dist_matrix_vectorized = dtw_vectorized(sample, pattern)
         dist_ref, cost_matrix, acc_cost_matrix, path = dtw(sample, pattern, dist=l2_dist)
-        assert np.allclose(dist_matrix, acc_cost_matrix)
-        assert np.isclose(dist_online, dist_matrix[-1, -1])
+        assert np.allclose(dist_matrix_vectorized, acc_cost_matrix)
+        # assert np.isclose(dist_online, dist_matrix[-1, -1])
 
 
 if __name__ == '__main__':
