@@ -6,14 +6,26 @@ import math
 import pickle
 from sklearn.metrics import pairwise_distances
 from sklearn.manifold import TSNE
+from sklearn.cluster import AffinityPropagation, AgglomerativeClustering
+from sklearn.neighbors import NearestNeighbors
 import string
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
+import matplotlib.patches as mpatches
+from matplotlib.collections import PatchCollection
 
 from dtw_solver import dtw_vectorized
 
-UJIPEN_PATH = Path.home() / "dataset" / "ujipenchars2" / "ujipenchars2.txt"
+UJIPEN_DIR = Path.home() / "dataset" / "ujipenchars2"
+UJIPEN_PATH = UJIPEN_DIR / "ujipenchars2.txt"
 UJIPEN_PATH_PICKLED = UJIPEN_PATH.with_suffix('.pkl')
+
+INTRA_DIST_KEY = "intra-dist"
+
+
+def _save_ujipen(data):
+    with open(UJIPEN_PATH_PICKLED, 'wb') as f:
+        pickle.dump(data, f)
 
 
 def read_ujipen(filter_duplicates=True):
@@ -25,8 +37,7 @@ def read_ujipen(filter_duplicates=True):
     with open(UJIPEN_PATH) as f:
         lines = f.readlines()
     data = {
-        "train": defaultdict(list),
-        "test": defaultdict(list)
+        fold: {} for fold in ('train', 'test')
     }
     line_id = 0
     while line_id < len(lines):
@@ -37,6 +48,8 @@ def read_ujipen(filter_duplicates=True):
                 fold = "train"
             else:
                 fold = "test"
+            if word not in data[fold]:
+                data[fold][word] = {"trials": []}
             line_id += 1
             numstrokes = int(lines[line_id][13:])
             assert numstrokes <= 5
@@ -55,10 +68,9 @@ def read_ujipen(filter_duplicates=True):
                     stroke_points = stroke_points[~duplicates]
                 points.append(stroke_points)
             points = np.vstack(points)  # todo handle strokes
-            data[fold][word].append(points)
+            data[fold][word]["trials"].append(points)
         line_id += 1
-    with open(UJIPEN_PATH_PICKLED, 'wb') as f:
-        pickle.dump(data, f)
+    _save_ujipen(data)
     return data
 
 
@@ -87,7 +99,7 @@ def correct_slant(data, vert_slant_angle=50):
     vert_slant_cotang = 1 / math.tan(vert_slant_angle)
     for fold in data.keys():
         for word, trials in data[fold].items():
-            for points in trials:
+            for points in trials["trials"]:
                 dx = np.diff(points[:, 0])
                 dy = np.diff(points[:, 1])
                 take = np.abs(dy / dx) > vert_slant_cotang
@@ -107,7 +119,7 @@ def normalize(data, keep_aspect_ratio=True):
     eps = 1e-6
     for fold in data.keys():
         for word, trials in data[fold].items():
-            for points in trials:
+            for points in trials["trials"]:
                 x, y = points.T
                 ymin, xmin, ymax, xmax = y.min(), x.min(), y.max(), x.max()
                 h = ymax - ymin
@@ -131,14 +143,16 @@ def filter_alphabet(data, alphabet=string.ascii_lowercase):
 
 
 def display(points, labels, margin=0.02):
+    rect_size_init = np.array([0.03, 0.03])
     for label in np.unique(labels):
         plt.figure()
         label_points = [points[i] for i in range(len(points)) if labels[i] == label]
         rows = math.floor(math.sqrt(len(label_points)))
         cols = math.ceil(len(label_points) / rows)
+        rect_size = rect_size_init * rows
         for i, sample in enumerate(label_points, start=1):
             sample = sample.copy()
-            plt.subplot(rows, cols, i)
+            ax = plt.subplot(rows, cols, i)
             dv = sample[1:] - sample[:-1]
             dist = np.linalg.norm(dv, axis=1)
             corners = np.where(dist > 0.2)[0]
@@ -147,6 +161,9 @@ def display(points, labels, margin=0.02):
             for chunk in np.split(sample, corners):
                 x, y = chunk.T
                 plt.plot(x, y)
+            rects = [mpatches.Rectangle(sample[pid] - rect_size / 2, *rect_size) for pid in (0, -1)]
+            pc = PatchCollection(rects, facecolors=['g', 'r'])
+            ax.add_collection(pc)
             plt.xlim(left=0 - margin, right=1 + margin)
             plt.ylim(bottom=0 - margin, top=1 + margin)
             plt.axis('off')
@@ -154,40 +171,71 @@ def display(points, labels, margin=0.02):
     plt.show()
 
 
-def visualize_inner_dist(data, word='a'):
-    word_points = data["train"][word]
-    # word_points = word_points[:40]
-    dist_matrix = np.zeros((len(word_points), len(word_points)), dtype=np.float32)
-    for i, anchor in enumerate(tqdm(word_points)):
-        for j, sample in enumerate(word_points[i + 1:], start=i + 1):
-            dist = dtw_vectorized(sample, anchor)[-1, -1]
-            dist /= len(sample) + len(anchor)
-            dist_matrix[i, j] = dist_matrix[j, i] = dist
-    nondiag_dist = dist_matrix[np.triu_indices_from(dist_matrix, k=1)]
-    print(f"Word '{word}' inner dist: {nondiag_dist.mean():.5f} ± {nondiag_dist.std():.5f} "
-          f"(min={nondiag_dist.min():.5f}, max={nondiag_dist.max():.5f})")
+def save_intra_dist(data):
+    for word, trials in data["train"].items():
+        if INTRA_DIST_KEY in data["train"][word]:
+            continue
+        word_points = trials["trials"]
+        dist_matrix = np.zeros((len(word_points), len(word_points)), dtype=np.float32)
+        for i, anchor in enumerate(tqdm(word_points, desc=f"Word {word}")):
+            for j, sample in enumerate(word_points[i + 1:], start=i + 1):
+                dist = dtw_vectorized(sample, anchor)[-1, -1]
+                dist /= len(sample) + len(anchor)
+                dist_matrix[i, j] = dist_matrix[j, i] = dist
+        data["train"][word][INTRA_DIST_KEY] = dist_matrix
+    _save_ujipen(data)
 
+
+def clean(data, word='a'):
+    def drop_labels(labels, labels_drop):
+        assert len(labels) == len(word_points)
+        word_points_filtered = []
+        labels_filtered = []
+        indices_drop = np.where(np.isin(labels_drop, labels))[0]
+        dist_matrix_filtered = np.delete(dist_matrix, indices_drop, axis=0)
+        dist_matrix_filtered = np.delete(dist_matrix_filtered, indices_drop, axis=1)
+        for points, label in zip(word_points, labels):
+            if label not in labels_drop:
+                word_points_filtered.append(points)
+                labels_filtered.append(label)
+        return word_points_filtered, labels_filtered, dist_matrix_filtered
+
+    dist_matrix = data["train"][word][INTRA_DIST_KEY]
+    word_points = data["train"][word]["trials"]
     predictor = DBSCAN(eps=dist_matrix.std() / 2, min_samples=2, metric='precomputed', n_jobs=-1)
     labels = predictor.fit_predict(dist_matrix)
     print(labels)
-
     display(word_points, labels)
 
-    tsne = TSNE(n_components=2, metric='precomputed')
-    transformed = tsne.fit_transform(dist_matrix)
-    plt.scatter(transformed[:, 0], transformed[:, 1])
-    plt.show()
-
-    plt.hist(nondiag_dist)
-    plt.show()
+    command = input("Next?\n").lower()
+    while command != 'next':
+        if command.startswith('drop'):
+            labels_drop = command[len('drop '):].split(' ')
+            labels_drop = np.asarray(labels_drop, dtype=int)
+            word_points, labels, dist_matrix = drop_labels(labels=labels, labels_drop=labels_drop)
+            print(f"Dropped {labels_drop}")
+            predictor = DBSCAN(eps=dist_matrix.std() / 2, min_samples=2, metric='precomputed', n_jobs=-1)
+            labels = predictor.fit_predict(dist_matrix)
+        elif command.startswith('cluster'):
+            n_clusters = int(command[len('cluster ')])
+            if 'linkage' in command:
+                linkage = command[command.index('linkage') + len('linkage '):]
+            else:
+                linkage = 'single'
+            print(f"clustering with n_clusters={n_clusters}, linkage={linkage}")
+            predictor = AgglomerativeClustering(n_clusters=n_clusters, affinity='precomputed', linkage=linkage)
+            labels = predictor.fit_predict(dist_matrix)
+        display(word_points, labels)
+        command = input('Next?\n').lower()
+    data["train"][word]["clusters"] = labels
+    _save_ujipen(data)
 
 
 if __name__ == '__main__':
     data = read_ujipen()
     filter_alphabet(data)
-    # del data['test']
-    # data['train'] = {'a': data['train']['a']}
     correct_slant(data)
     normalize(data)
+    save_intra_dist(data)
     for word in string.ascii_lowercase:
-        visualize_inner_dist(data, word)
+        clean(data, word)
