@@ -226,6 +226,17 @@ class UJIPen:
             plt.suptitle(f'Label {label}')
         plt.show()
 
+    def show_trial_size(self, patterns_only=False):
+        sizes = []
+        if patterns_only:
+            samples = self.get_min_intra_dist_patterns()
+        else:
+            samples = self.get_samples()
+        for word, trials in samples.items():
+            sizes.extend(map(len, trials))
+        plt.hist(sizes)
+        plt.show()
+
 
 if __name__ == '__main__':
     ujipen = UJIPen(force_read=True)

@@ -115,10 +115,8 @@ def normalize(data, keep_aspect_ratio=True):
             for points in trials[TRIALS_KEY]:
                 x, y = points.T
                 ymin, xmin, ymax, xmax = y.min(), x.min(), y.max(), x.max()
-                h = ymax - ymin
-                w = xmax - xmin
-                scale_x = 1 / w
-                scale_y = 1 / h
+                scale_x = 1 / (xmax - xmin)
+                scale_y = 1 / (ymax - ymin)
                 if keep_aspect_ratio:
                     scale_x = scale_y = min(scale_x, scale_y)
                 xc = (xmin + xmax) / 2
