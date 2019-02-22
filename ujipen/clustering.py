@@ -1,16 +1,15 @@
 import math
 import pickle
-import string
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import PatchCollection
 from sklearn.cluster import AgglomerativeClustering, DBSCAN
-import warnings
 
 from ujipen.constants import *
-from ujipen.loader import read_ujipen, _save_ujipen, filter_alphabet, correct_slant, normalize, save_intra_dist
+from ujipen.loader import read_ujipen, _save_ujipen, filter_alphabet, correct_slant, normalize, save_intra_dist, \
+    check_shapes
 
 
 def display(points, labels, margin=0.02):
@@ -55,14 +54,17 @@ class UJIPen:
             _save_ujipen(data, path=UJIPEN_PKL)
         with open(UJIPEN_PKL, 'rb') as f:
             self.data = pickle.load(f)
+        check_shapes(self.data)
 
     def drop_labels(self, word: str, labels_drop):
         word_points = self.data["train"][word][TRIALS_KEY]
         labels = self.data["train"][word][LABELS_KEY]
         dist_matrix = self.data["train"][word][INTRA_DIST_KEY]
-        assert len(word_points) == len(labels)
-        word_points = [word_points[i] for i in range(len(word_points)) if labels[i] not in labels_drop]
+        assert len(word_points) == len(labels) == dist_matrix.shape[0] == dist_matrix.shape[1]
         indices_drop = np.where(np.isin(labels, labels_drop))[0]
+        if len(indices_drop) == 0:
+            return
+        word_points = [word_points[i] for i in range(len(word_points)) if labels[i] not in labels_drop]
         labels = np.delete(labels, indices_drop)
         for axis in (0, 1):
             dist_matrix = np.delete(dist_matrix, indices_drop, axis=axis)
@@ -71,58 +73,99 @@ class UJIPen:
         self.data["train"][word][LABELS_KEY] = labels
         self.data["train"][word][INTRA_DIST_KEY] = dist_matrix
         _save_ujipen(self.data)
-        _save_ujipen(self.data, path=UJIPEN_DBSCANNED)
         print(f"Word {word}: dropped {labels_drop}")
 
-    def dbscan(self, word: str):
-        command = ''
-        while command != 'next':
-            word_points = self.data["train"][word][TRIALS_KEY]
+    @staticmethod
+    def take_matrix_by_mask(dist_matrix: np.ndarray, mask_take):
+        positions = np.where(mask_take)[0]
+        dist_matrix = dist_matrix.copy()
+        for axis in (0, 1):
+            dist_matrix = np.take(dist_matrix, indices=positions, axis=axis)
+        return dist_matrix
+
+    @staticmethod
+    def take_trials_by_mask(trials: list, mask_take):
+        return [_trial for _trial, leave_element in zip(trials, mask_take) if leave_element]
+
+    def compute_clustering_factor(self, labels, dist_matrix):
+        assert len(labels) == dist_matrix.shape[0] == dist_matrix.shape[1]
+        intra_dist = 0
+        inter_dist = 0
+        for label_unique in set(labels):
+            mask = labels == label_unique
+            if mask.sum() == 1:
+                # skip clusters with a single sample
+                continue
+            intra_matrix = self.take_matrix_by_mask(dist_matrix, mask)
+            inter_matrix = self.take_matrix_by_mask(dist_matrix, ~mask)
+            intra_dist += intra_matrix.sum()
+            inter_dist += inter_matrix.sum()
+        factor = intra_dist / inter_dist
+        return factor
+
+    def cluster(self, max_clusters=10, intra_inter_thr_ratio=0.1, visualize=False):
+        assert max_clusters >= 2, "At least 2 clusters per word"
+        for word in self.data["train"].keys():
             dist_matrix = self.data["train"][word][INTRA_DIST_KEY]
-            labels = self.data["train"][word].get(LABELS_KEY, np.zeros(len(word_points), dtype=int))
-            display(word_points, labels)
-            command = input('Next?\n').lower()
-            if command.startswith('dbscan'):
-                scale = int(command[len('dbscan ')])
-                if 'label' in command:
-                    label = int(command[command.index('label') + len('label=')])
-                    indices_leave = np.where(labels == label)[0]
-                    dist_matrix_label = dist_matrix.copy()
-                    for axis in (0, 1):
-                        dist_matrix_label = np.take(dist_matrix_label, indices_leave, axis=axis)
-                    predictor = DBSCAN(eps=dist_matrix_label.std() / scale, min_samples=2, metric='precomputed', n_jobs=-1)
-                    sublabels = predictor.fit_predict(dist_matrix_label)
-                    sublabels += labels.max() + 2
-                    labels[indices_leave] = sublabels
-                else:
-                    predictor = DBSCAN(eps=dist_matrix.std() / scale, min_samples=2, metric='precomputed', n_jobs=-1)
-                    labels = predictor.fit_predict(dist_matrix)
-                self.data["train"][word][LABELS_KEY] = labels
-            elif command.startswith('cluster'):
-                n_clusters = int(command[len('cluster ')])
-                if 'label' in command:
-                    label = int(command[command.index('label') + len('label=')])
-                    indices_leave = np.where(labels == label)[0]
-                    dist_matrix_label = dist_matrix.copy()
-                    for axis in (0, 1):
-                        dist_matrix_label = np.take(dist_matrix_label, indices_leave, axis=axis)
-                    predictor = AgglomerativeClustering(n_clusters=n_clusters, affinity='precomputed',
-                                                        linkage='average')
-                    sublabels = predictor.fit_predict(dist_matrix_label)
-                    sublabels += labels.max() + 2
-                    labels[indices_leave] = sublabels
-                else:
-                    predictor = AgglomerativeClustering(n_clusters=n_clusters, affinity='precomputed',
-                                                        linkage='average')
-                    labels = predictor.fit_predict(dist_matrix)
-                self.data["train"][word][LABELS_KEY] = labels
-            elif command.startswith('drop'):
-                labels_drop = command[len('drop '):].split(' ')
-                labels_drop = np.asarray(labels_drop, dtype=int)
-                self.drop_labels(word=word, labels_drop=labels_drop)
+            clustering_factor = np.repeat(np.inf, repeats=max_clusters + 1)
+            mask_non_single_experiment = {}
+            labels_experiment = {}
+            for n_clusters_cand in range(2, max_clusters + 1):
+                predictor = AgglomerativeClustering(n_clusters=n_clusters_cand, affinity='precomputed',
+                                                    linkage='average')
+                labels = predictor.fit_predict(dist_matrix)
+                labels_unique, counts = np.unique(labels, return_counts=True)
+                labels_unique = labels_unique[counts > 1]  # drop outliers
+                mask_non_single = np.isin(labels, labels_unique)
+                labels = labels[mask_non_single]
+                n_clusters_cand = len(set(labels))
+
+                factor = self.compute_clustering_factor(labels, self.take_matrix_by_mask(dist_matrix, mask_non_single))
+
+                clustering_factor[n_clusters_cand] = min(clustering_factor[n_clusters_cand], factor)
+                labels_experiment[n_clusters_cand] = labels
+                mask_non_single_experiment[n_clusters_cand] = mask_non_single
+
+            n_clusters_best = np.where(clustering_factor < intra_inter_thr_ratio)[0]
+            if len(n_clusters_best) > 0:
+                n_clusters_best = n_clusters_best[0]
+            else:
+                n_clusters_best = clustering_factor.argmin()
+            print(f"Word {word}: split with n_clusters={n_clusters_best}")
+            self.data["train"][word][LABELS_KEY] = labels_experiment[n_clusters_best]
+            mask_non_single = mask_non_single_experiment[n_clusters_best]
+            self.data["train"][word][TRIALS_KEY] = self.take_trials_by_mask(self.data["train"][word][TRIALS_KEY],
+                                                                            mask_non_single)
+            self.data["train"][word][INTRA_DIST_KEY] = self.take_matrix_by_mask(dist_matrix, mask_non_single)
+
+            if visualize:
+                plt.plot(range(len(clustering_factor)), clustering_factor)
+                plt.hlines(y=intra_inter_thr_ratio, xmin=2, xmax=max_clusters, linestyles='dashed')
+                plt.scatter(x=n_clusters_best, y=clustering_factor[n_clusters_best], s=30)
+                plt.title(f"Word {word}")
+                plt.show()
+        _save_ujipen(self.data)
+
+    def dbscan(self, scale=0.5, display_outliers=False):
+        for word in self.data["train"].keys():
+            dist_matrix = self.data["train"][word][INTRA_DIST_KEY]
+            eps = scale * dist_matrix.std()
+            predictor = DBSCAN(eps=eps, min_samples=2, metric='precomputed', n_jobs=-1)
+            labels = predictor.fit_predict(dist_matrix)
+            self.data["train"][word][LABELS_KEY] = labels
+            self.drop_labels(word, labels_drop=[-1])
+            if display_outliers and -1 in labels:
+                word_points = self.data["train"][word][TRIALS_KEY]
+                display(word_points, labels)
+
+    def display_clustering(self):
+        for word in self.data["train"].keys():
+            labels = self.data["train"][word].get(LABELS_KEY, None)
+            if labels is not None:
+                display(self.data["train"][word][TRIALS_KEY], labels)
 
 
 if __name__ == '__main__':
-    ujipen = UJIPen()
-    for word in string.ascii_lowercase[5:]:
-        ujipen.dbscan(word)
+    ujipen = UJIPen(force_read=True)
+    ujipen.dbscan()
+    ujipen.cluster(visualize=True)

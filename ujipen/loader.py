@@ -13,6 +13,7 @@ from ujipen.constants import *
 
 
 def _save_ujipen(data, path=UJIPEN_PKL):
+    check_shapes(data)
     with open(path, 'wb') as f:
         pickle.dump(data, f)
 
@@ -29,6 +30,19 @@ def download_ujipen():
             wrote_bytes += f.write(data)
     if wrote_bytes != total_size:
         warnings.warn("Content length mismatch. Try downloading again.")
+
+
+def check_shapes(data):
+    for word in data["train"].keys():
+        word_points = data["train"][word][TRIALS_KEY]
+        dist_matrix = data["train"][word].get(INTRA_DIST_KEY, None)
+        shapes = [len(word_points)]
+        if dist_matrix is not None:
+            shapes.extend(dist_matrix.shape)
+        labels = data["train"][word].get(LABELS_KEY, None)
+        if labels is not None:
+            shapes.append(len(labels))
+        assert len(set(shapes)) == 1  # all equal
 
 
 def read_ujipen(filter_duplicates=True):
@@ -122,7 +136,7 @@ def filter_alphabet(data, alphabet=string.ascii_lowercase):
 
 
 def save_intra_dist(data):
-    intra_dist = {}
+    intra_dist = {}  # todo remove this hack
     if UJIPEN_INTRA_DIST_PATH.exists():
         with open(UJIPEN_INTRA_DIST_PATH, 'rb') as f:
             intra_dist = pickle.load(f)
