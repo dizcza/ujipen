@@ -74,21 +74,6 @@ class UJIPen:
         _save_ujipen(self.data, path=UJIPEN_DBSCANNED)
         print(f"Word {word}: dropped {labels_drop}")
 
-    def cluster(self, command, dist_matrix, labels,):
-        if 'label' in command:
-            label = int(command[command.index('label') + len('label=')])
-            indices_drop = np.where(labels == label)[0]
-            dist_matrix_label = dist_matrix.copy()
-            for axis in (0, 1):
-                dist_matrix_label = np.delete(dist_matrix_label, indices_drop, axis=axis)
-            predictor = DBSCAN(eps=dist_matrix_label.std() / scale, min_samples=2, metric='precomputed', n_jobs=-1)
-            sublabels = predictor.fit_predict(dist_matrix_label)
-            sublabels += labels.max() + 2
-            labels[indices_drop] = sublabels
-        else:
-            predictor = DBSCAN(eps=dist_matrix.std() / scale, min_samples=2, metric='precomputed', n_jobs=-1)
-            labels = predictor.fit_predict(dist_matrix)
-
     def dbscan(self, word: str):
         command = ''
         while command != 'next':
@@ -104,7 +89,7 @@ class UJIPen:
                     indices_leave = np.where(labels == label)[0]
                     dist_matrix_label = dist_matrix.copy()
                     for axis in (0, 1):
-                        dist_matrix_label = np.delete(dist_matrix_label, indices_leave, axis=axis)
+                        dist_matrix_label = np.take(dist_matrix_label, indices_leave, axis=axis)
                     predictor = DBSCAN(eps=dist_matrix_label.std() / scale, min_samples=2, metric='precomputed', n_jobs=-1)
                     sublabels = predictor.fit_predict(dist_matrix_label)
                     sublabels += labels.max() + 2
@@ -115,30 +100,21 @@ class UJIPen:
                 self.data["train"][word][LABELS_KEY] = labels
             elif command.startswith('cluster'):
                 n_clusters = int(command[len('cluster ')])
-                if 'linkage' in command:
-                    linkage = command[command.index('linkage') + len('linkage='):]
-                else:
-                    linkage = 'single'
-
-                message = f"clustering with n_clusters={n_clusters}, linkage={linkage}"
-
                 if 'label' in command:
                     label = int(command[command.index('label') + len('label=')])
-                    message += f' label={label}'
                     indices_leave = np.where(labels == label)[0]
                     dist_matrix_label = dist_matrix.copy()
                     for axis in (0, 1):
-                        dist_matrix_label = np.delete(dist_matrix_label, indices_leave, axis=axis)
+                        dist_matrix_label = np.take(dist_matrix_label, indices_leave, axis=axis)
                     predictor = AgglomerativeClustering(n_clusters=n_clusters, affinity='precomputed',
-                                                        linkage=linkage)
+                                                        linkage='average')
                     sublabels = predictor.fit_predict(dist_matrix_label)
                     sublabels += labels.max() + 2
                     labels[indices_leave] = sublabels
                 else:
                     predictor = AgglomerativeClustering(n_clusters=n_clusters, affinity='precomputed',
-                                                        linkage=linkage)
+                                                        linkage='average')
                     labels = predictor.fit_predict(dist_matrix)
-                print(message)
                 self.data["train"][word][LABELS_KEY] = labels
             elif command.startswith('drop'):
                 labels_drop = command[len('drop '):].split(' ')
@@ -148,5 +124,5 @@ class UJIPen:
 
 if __name__ == '__main__':
     ujipen = UJIPen()
-    for word in string.ascii_lowercase[3:]:
+    for word in string.ascii_lowercase[5:]:
         ujipen.dbscan(word)
