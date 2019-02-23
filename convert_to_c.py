@@ -1,7 +1,7 @@
-import numpy as np
 import string
 
 from constants import *
+from preprocess import make_patterns_fixed_size, is_inside_unit_box
 from ujipen.clustering import UJIPen
 from manual.loader import load_manual_patterns
 
@@ -19,23 +19,14 @@ H_FILE_HEADER = f"""/*
 """
 
 
-def make_patterns_fixed_size(patterns):
-    patterns_fixed_size = {}
-    for word in patterns.keys():
-        patterns_fixed_size[word] = []
-        for trial in patterns[word]:
-            indices = np.linspace(0, len(trial) - 1, num=PATTERN_SIZE, endpoint=True, dtype=np.int32)
-            trial = trial[indices]
-            patterns_fixed_size[word].append(trial)
-    return patterns_fixed_size
-
-
 def convert_to_c(patterns, dtype='float32_t'):
     patterns = make_patterns_fixed_size(patterns)
     total_patterns = sum(map(len, patterns.values()))
     assert ''.join(sorted(patterns.keys())) == string.ascii_lowercase
     for word in patterns.keys():
-        assert set(map(len, patterns[word])) == {PATTERN_SIZE}
+        for trial in patterns[word]:
+            assert len(trial) == PATTERN_SIZE
+            is_inside_unit_box(trial)
     pattern_coords_decl = lambda suffix: f"const {dtype} PATTERN_COORDS_{suffix}[TOTAL_PATTERNS][PATTERN_SIZE]"
 
     h_lines = [
@@ -59,7 +50,7 @@ def convert_to_c(patterns, dtype='float32_t'):
         "#include \"char_patterns.h\"",
         f"\n\nconst uint8_t PATTERN_LABEL[TOTAL_PATTERNS] = \"{labels_true}\";\n",
     ]
-    
+
     def write_single_coordinates(one_dim_coords: list, suffix: str):
         c_lines.append(f"\n{pattern_coords_decl(suffix)} = {{")
         for x in one_dim_coords:

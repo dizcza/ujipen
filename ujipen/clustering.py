@@ -9,7 +9,7 @@ from matplotlib.collections import PatchCollection
 from sklearn.cluster import AgglomerativeClustering, DBSCAN
 
 from ujipen.constants import *
-from ujipen.loader import read_ujipen, _save_ujipen, filter_alphabet, correct_slant, normalize, save_intra_dist, \
+from ujipen.loader import ujipen_read, _save_ujipen, filter_alphabet, ujipen_correct_slant, ujipen_normalize, save_intra_dist, \
     check_shapes
 
 
@@ -17,10 +17,10 @@ class UJIPen:
 
     def __init__(self, force_read=False):
         if force_read:
-            data = read_ujipen()
+            data = ujipen_read()
             filter_alphabet(data)
-            correct_slant(data)
-            normalize(data)
+            ujipen_correct_slant(data)
+            ujipen_normalize(data)
             save_intra_dist(data)
             _save_ujipen(data, path=UJIPEN_PKL)
         with open(UJIPEN_PKL, 'rb') as f:

@@ -10,6 +10,7 @@ from tqdm import tqdm
 from dtw_solver import dtw_vectorized
 
 from ujipen.constants import *
+from preprocess import normalize, correct_slant, filter_duplicates
 
 
 def _save_ujipen(data, path=UJIPEN_PKL):
@@ -18,7 +19,7 @@ def _save_ujipen(data, path=UJIPEN_PKL):
         pickle.dump(data, f)
 
 
-def download_ujipen():
+def ujipen_download():
     UJIPEN_DIR.mkdir(parents=True, exist_ok=True)
     request = requests.get(UJIPEN_URL, stream=True)
     total_size = int(request.headers.get('content-length', 0))
@@ -45,9 +46,9 @@ def check_shapes(data):
         assert len(set(shapes)) == 1  # all equal
 
 
-def read_ujipen(filter_duplicates=True):
+def ujipen_read():
     if not UJIPEN_TXT.exists():
-        download_ujipen()
+        ujipen_download()
     with open(UJIPEN_TXT) as f:
         lines = f.readlines()
     data = {
@@ -76,10 +77,7 @@ def read_ujipen(filter_duplicates=True):
                 stroke_points = line[hashtag_pos + 2:].split(' ')
                 stroke_points = np.asarray(stroke_points, dtype=np.float32).reshape(-1, 2)
                 assert len(stroke_points) == num_points
-                if filter_duplicates:
-                    duplicates = (stroke_points[1:] == stroke_points[:-1]).all(axis=1)
-                    duplicates = np.r_[False, duplicates]  # always add first
-                    stroke_points = stroke_points[~duplicates]
+                stroke_points = filter_duplicates(stroke_points)
                 points.append(stroke_points)
             points = np.vstack(points)  # todo handle strokes
             data[fold][word][TRIALS_KEY].append(points)
@@ -87,43 +85,18 @@ def read_ujipen(filter_duplicates=True):
     return data
 
 
-def correct_slant(data):
-    vert_slant_radians = math.radians(VERT_SLANGE_ANGLE)
-    vert_slant_cotang = 1 / math.tan(vert_slant_radians)
+def ujipen_correct_slant(data):
     for fold in data.keys():
         for word, trials in data[fold].items():
             for points in trials[TRIALS_KEY]:
-                dx = np.diff(points[:, 0])
-                dy = np.diff(points[:, 1])
-                take = np.abs(dy / dx) > vert_slant_cotang
-                dx = dx[take]
-                dy = dy[take]
-                dx[dy < 0] *= -1
-                dy[dy < 0] *= -1
-
-                slant_dx, slant_dy = np.c_[dx, dy].sum(axis=0)
-                if slant_dy == 0:
-                    continue
-                shear = -slant_dx / slant_dy
-                points[:, 0] = points[:, 0] + points[:, 1] * shear
+                correct_slant(points)
 
 
-def normalize(data, keep_aspect_ratio=True):
-    eps = 1e-6
+def ujipen_normalize(data, keep_aspect_ratio=True):
     for fold in data.keys():
         for word, trials in data[fold].items():
             for points in trials[TRIALS_KEY]:
-                x, y = points.T
-                ymin, xmin, ymax, xmax = y.min(), x.min(), y.max(), x.max()
-                scale_x = 1 / (xmax - xmin)
-                scale_y = 1 / (ymax - ymin)
-                if keep_aspect_ratio:
-                    scale_x = scale_y = min(scale_x, scale_y)
-                xc = (xmin + xmax) / 2
-                yc = (ymin + ymax) / 2
-                points[:, 0] = 0.5 + (x - xc) * scale_x
-                points[:, 1] = 0.5 + (y - yc) * scale_y
-                assert np.logical_and(points >= -eps, points <= 1. + eps).all()
+                normalize(points, keep_aspect_ratio=keep_aspect_ratio)
 
 
 def filter_alphabet(data, alphabet=string.ascii_lowercase):
