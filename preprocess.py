@@ -17,18 +17,50 @@ def filter_duplicates(points: np.ndarray):
     return points
 
 
-def make_patterns_fixed_size(patterns: Dict[str, List[np.ndarray]]):
+def make_patterns_fixed_size(patterns: Dict[str, List[np.ndarray]], total_points=PATTERN_SIZE):
     """
+    Dummy function. Use equally_spaced_points instead.
     :param patterns: dict of sample trials to be used as patterns
-    :return: patterns, each of which has PATTERN_SIZE XY pairs of points
+    :param total_points: num of points
+    :return: patterns, each of which has `total_points` XY pairs of points
     """
     patterns_fixed_size = {}
     for word in patterns.keys():
         patterns_fixed_size[word] = []
         for trial in patterns[word]:
-            indices = np.linspace(0, len(trial) - 1, num=PATTERN_SIZE, endpoint=True, dtype=np.int32)
+            indices = np.linspace(0, len(trial) - 1, num=total_points, endpoint=True, dtype=np.int32)
             trial = trial[indices]
             patterns_fixed_size[word].append(trial)
+    return patterns_fixed_size
+
+
+def equally_spaced_points(patterns: Dict[str, List[np.ndarray]], total_points=PATTERN_SIZE):
+    """
+    :param patterns: dict of sample trials to be used as patterns
+    :param total_points: num of points
+    :return: patterns, each of which has `total_points` XY pairs of points,
+             distributed equally along the path that connects segments.
+    """
+    patterns_fixed_size = {}
+    for word in patterns.keys():
+        patterns_fixed_size[word] = []
+        for trial in patterns[word]:
+            segment_vectors = trial[1:] - trial[:-1]
+            segment_lengths = np.linalg.norm(segment_vectors, axis=1)
+            pattern_length = segment_lengths.sum()
+            segment_cumsum = np.r_[0, segment_lengths.cumsum()]
+            segment_coords = np.linspace(0, pattern_length, num=total_points - 1, endpoint=False)
+            points_equally_spaced = []
+            for coord in segment_coords:
+                segment_bin = np.digitize(coord, bins=segment_cumsum, right=False) - 1
+                segment_part = (coord - segment_cumsum[segment_bin]) / segment_lengths[segment_bin]
+                assert 0 <= segment_part < 1
+                vec_add = segment_vectors[segment_bin] * segment_part
+                point_new = trial[segment_bin] + vec_add
+                points_equally_spaced.append(point_new)
+            points_equally_spaced.append(trial[-1])
+            points_equally_spaced = np.array(points_equally_spaced)
+            patterns_fixed_size[word].append(points_equally_spaced)
     return patterns_fixed_size
 
 

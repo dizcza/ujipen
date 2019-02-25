@@ -1,4 +1,3 @@
-import math
 import pickle
 import string
 import warnings
@@ -8,9 +7,8 @@ import requests
 from tqdm import tqdm
 
 from dtw_solver import dtw_vectorized
-
-from ujipen.constants import *
-from preprocess import normalize, correct_slant, filter_duplicates
+from preprocess import normalize, correct_slant, filter_duplicates, equally_spaced_points
+from ujipen.ujipen_constants import *
 
 
 def _save_ujipen(data, path=UJIPEN_PKL):
@@ -97,6 +95,16 @@ def ujipen_normalize(data, keep_aspect_ratio=True):
         for word, trials in data[fold].items():
             for points in trials[TRIALS_KEY]:
                 normalize(points, keep_aspect_ratio=keep_aspect_ratio)
+
+
+def ujipen_equally_spaced_points(data):
+    for fold in data.keys():
+        samples = {
+            word: trials[TRIALS_KEY] for word, trials in data[fold].items()
+        }
+        samples_equally_spaced = equally_spaced_points(samples)
+        for word in data[fold].keys():
+            data[fold][word][TRIALS_KEY] = samples_equally_spaced[word]
 
 
 def filter_alphabet(data, alphabet=string.ascii_lowercase):

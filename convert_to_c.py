@@ -1,8 +1,8 @@
 import string
 
 from constants import *
-from preprocess import make_patterns_fixed_size, is_inside_unit_box
-from ujipen.clustering import UJIPen
+from preprocess import equally_spaced_points, is_inside_unit_box
+from ujipen.ujipen_class import UJIPen
 from manual.loader import load_manual_patterns
 
 H_FILE_HEADER = f"""/*
@@ -20,7 +20,7 @@ H_FILE_HEADER = f"""/*
 
 
 def convert_to_c(patterns, dtype='float32_t'):
-    patterns = make_patterns_fixed_size(patterns)
+    patterns = equally_spaced_points(patterns)
     total_patterns = sum(map(len, patterns.values()))
     assert ''.join(sorted(patterns.keys())) == string.ascii_lowercase
     for word in patterns.keys():

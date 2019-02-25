@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 import pickle
 
 from dtw_solver import dtw_vectorized
-from ujipen.clustering import UJIPen
+from ujipen.ujipen_class import UJIPen
 
-from ujipen.constants import UJIPEN_DIR
+from ujipen.ujipen_constants import UJIPEN_DIR
 
 UJIPEN_PRECOMPUTED_DISTANCES_PATH = UJIPEN_DIR / "distances.pkl"
 
