@@ -1,11 +1,33 @@
+import math
 import pickle
 
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.collections import PatchCollection
 
-from helper import take_matrix_by_mask, take_trials_by_mask, display
+from helper import take_matrix_by_mask, take_trials_by_mask, draw_sample
 from ujipen.loader import ujipen_read, _save_ujipen, filter_alphabet, ujipen_correct_slant, ujipen_normalize, \
-    save_intra_dist, check_shapes, ujipen_equally_spaced_points, ujipen_drop_from_dropped_list
+    save_intra_dist, check_shapes, ujipen_drop_from_dropped_list
 from ujipen.ujipen_constants import *
+from ujipen.ujipen_constants import UJIPEN_DROPPED_LIST
+
+
+def onclick_drop_callback(event):
+    if event.inaxes is None:
+        return
+    label = event.canvas.figure.number
+    session_drop = event.inaxes.get_title()
+    dropped_list = []
+    if UJIPEN_DROPPED_LIST.exists():
+        with open(UJIPEN_DROPPED_LIST) as f:
+            dropped_list = f.readlines()
+    dropped_list = set(dropped_list)
+    dropped_list.add(session_drop + '\n')
+    dropped_list = sorted(dropped_list)
+    with open(UJIPEN_DROPPED_LIST, 'w') as f:
+        f.writelines(dropped_list)
+    print(f"Added '{session_drop}' label={label} in a dropped list.")
 
 
 class UJIPen:
@@ -30,9 +52,9 @@ class UJIPen:
         total_patterns = sum(map(len, patterns.values()))
         return total_patterns
 
-    def display_clustering(self):
+    def display_clustering(self, drop_onclick=False):
         for word in self.data["train"].keys():
-            self.display(word)
+            self.display(word, drop_onclick=drop_onclick)
 
     def get_min_intra_dist_patterns(self):
         patterns = {}
@@ -55,13 +77,44 @@ class UJIPen:
             word: self.data[fold][word][TRIALS_KEY] for word in self.data[fold].keys()
         }
 
-    def display(self, word, labels=None):
+    def display(self, word, labels=None, drop_onclick=False):
         if labels is None:
             labels = self.data["train"][word].get(LABELS_KEY, None)
         word_points = self.data["train"][word][TRIALS_KEY]
         dist_matrix = self.data["train"][word][INTRA_DIST_KEY]
         sample_ids = self.data["train"][word][SESSION_KEY]
-        display(word_points, sample_ids=sample_ids, labels=labels, dist_matrix=dist_matrix)
+        if labels is None:
+            labels = np.ones(len(word_points), dtype=np.int32)
+        rect_size_init = np.array([0.03, 0.03])
+        for label in np.unique(labels):
+            fig = plt.figure(label)
+            if drop_onclick:
+                fig.canvas.mpl_connect('button_press_event', onclick_drop_callback)
+            cluster_points = []
+            cluster_sample_ids = []
+            for pid in range(len(word_points)):
+                if labels[pid] == label:
+                    cluster_points.append(word_points[pid])
+                    cluster_sample_ids.append(sample_ids[pid])
+            rows = math.floor(math.sqrt(len(cluster_points)))
+            cols = math.ceil(len(cluster_points) / rows)
+            rect_size = rect_size_init * rows
+
+            dist_matrix_cluster = take_matrix_by_mask(dist_matrix, mask_take=labels == label)
+            min_inter_dist_id = dist_matrix_cluster.sum(axis=0).argmin()
+
+            for i, sample in enumerate(cluster_points):
+                ax = plt.subplot(rows, cols, i + 1)
+                draw_sample(sample)
+                rects = [mpatches.Rectangle(sample[pid] - rect_size / 2, *rect_size) for pid in (0, -1)]
+                pc = PatchCollection(rects, facecolors=['g', 'r'])
+                ax.add_collection(pc)
+                if i == min_inter_dist_id:
+                    rect = mpatches.Rectangle((0, 0), width=1, height=1, fill=False, fc='none', ec='black', lw=2)
+                    ax.add_patch(rect)
+                plt.title(cluster_sample_ids[i], fontsize=5)
+            plt.suptitle(f'Label {label}')
+        plt.show()
 
     def show_trial_size(self, patterns_only=False):
         sizes = []
@@ -79,4 +132,4 @@ if __name__ == '__main__':
     ujipen = UJIPen()
     print(f"UJIPen num. of patterns: {ujipen.num_patterns}")
     # ujipen.show_trial_size()
-    ujipen.display_clustering()
+    ujipen.display_clustering(drop_onclick=True)
