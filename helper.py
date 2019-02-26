@@ -1,9 +1,12 @@
 import math
+from typing import Iterable
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import PatchCollection
+
+from ujipen.ujipen_constants import UJIPEN_DROPPED_LIST
 
 
 def take_matrix_by_mask(dist_matrix: np.ndarray, mask_take):
@@ -18,6 +21,10 @@ def take_trials_by_mask(trials: list, mask_take):
     return [_trial for _trial, leave_element in zip(trials, mask_take) if leave_element]
 
 
+def drop_items(items: list, drop_ids: Iterable[int]):
+    return [items[i] for i in range(len(items)) if i not in drop_ids]
+
+
 def draw_sample(sample: np.ndarray):
     margin = 0.02
     x, y = sample.T
@@ -28,15 +35,39 @@ def draw_sample(sample: np.ndarray):
     plt.axis('off')
 
 
-def display(word_points, labels=None, dist_matrix=None, between_stroke_thr=0.2):
+def onclick(event):
+    if event.inaxes is None:
+        return
+    label = event.canvas.figure.number
+    session_drop = event.inaxes.get_title()
+    dropped_list = []
+    if UJIPEN_DROPPED_LIST.exists():
+        with open(UJIPEN_DROPPED_LIST) as f:
+            dropped_list = f.readlines()
+    dropped_list = set(dropped_list)
+    dropped_list.add(session_drop + '\n')
+    dropped_list = sorted(dropped_list)
+    with open(UJIPEN_DROPPED_LIST, 'w') as f:
+        f.writelines(dropped_list)
+    print(f"Added '{session_drop}' label={label} in a dropped list.")
+
+
+def display(word_points, sample_ids=None, labels=None, dist_matrix=None, between_stroke_thr=0.2):
     if labels is None:
         labels = np.ones(len(word_points), dtype=np.int32)
     margin = 0.02
     colors = ['blue', 'orange', 'cyan', 'black', 'magenta']
     rect_size_init = np.array([0.03, 0.03])
     for label in np.unique(labels):
-        plt.figure()
-        cluster_points = [word_points[i] for i in range(len(word_points)) if labels[i] == label]
+        fig = plt.figure(label)
+        fig.canvas.mpl_connect('button_press_event', onclick)
+        cluster_points = []
+        cluster_sample_ids = []
+        for pid in range(len(word_points)):
+            if labels[pid] == label:
+                cluster_points.append(word_points[pid])
+                if sample_ids is not None:
+                    cluster_sample_ids.append(sample_ids[pid])
         rows = math.floor(math.sqrt(len(cluster_points)))
         cols = math.ceil(len(cluster_points) / rows)
         rect_size = rect_size_init * rows
@@ -68,5 +99,6 @@ def display(word_points, labels=None, dist_matrix=None, between_stroke_thr=0.2):
             plt.xlim(left=0 - margin, right=1 + margin)
             plt.ylim(bottom=0 - margin, top=1 + margin)
             plt.axis('off')
+            plt.title(cluster_sample_ids[i], fontsize=5)
         plt.suptitle(f'Label {label}')
     plt.show()

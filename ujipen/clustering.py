@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering, DBSCAN
 
-from helper import take_matrix_by_mask, take_trials_by_mask
+from helper import take_matrix_by_mask, take_trials_by_mask, drop_items
 from ujipen.loader import _save_ujipen
 from ujipen.ujipen_class import UJIPen
 from ujipen.ujipen_constants import *
@@ -13,20 +13,16 @@ from ujipen.ujipen_constants import *
 class UJIPenClustering(UJIPen):
 
     def drop_labels(self, word: str, labels_drop):
-        word_points = self.data["train"][word][TRIALS_KEY]
         labels = self.data["train"][word][LABELS_KEY]
         dist_matrix = self.data["train"][word][INTRA_DIST_KEY]
-        assert len(word_points) == len(labels) == dist_matrix.shape[0] == dist_matrix.shape[1]
         indices_drop = np.where(np.isin(labels, labels_drop))[0]
         if len(indices_drop) == 0:
             return
-        word_points = [word_points[i] for i in range(len(word_points)) if labels[i] not in labels_drop]
-        labels = np.delete(labels, indices_drop)
+        self.data["train"][word][TRIALS_KEY] = drop_items(self.data["train"][word][TRIALS_KEY], indices_drop)
+        self.data["train"][word][SESSION_KEY] = drop_items(self.data["train"][word][SESSION_KEY], indices_drop)
+        self.data["train"][word][LABELS_KEY] = np.delete(labels, indices_drop)
         for axis in (0, 1):
             dist_matrix = np.delete(dist_matrix, indices_drop, axis=axis)
-        assert len(word_points) == len(labels) == dist_matrix.shape[0] == dist_matrix.shape[1]
-        self.data["train"][word][TRIALS_KEY] = word_points
-        self.data["train"][word][LABELS_KEY] = labels
         self.data["train"][word][INTRA_DIST_KEY] = dist_matrix
         _save_ujipen(self.data)
         print(f"Word {word}: dropped {labels_drop}")
@@ -70,7 +66,7 @@ class UJIPenClustering(UJIPen):
             label_split = labels_unique[counts_argsort[0]]
             mask_split = labels == label_split
             dist_matrix_split = take_matrix_by_mask(dist_matrix, mask_split)
-            sublabels = UJIPen.cluster_distances(dist_matrix_split, n_clusters=2)
+            sublabels = UJIPenClustering.cluster_distances(dist_matrix_split, n_clusters=2)
             sublabels += labels.max() + 1
             labels[mask_split] = sublabels
         return labels
@@ -110,6 +106,8 @@ class UJIPenClustering(UJIPen):
             mask_non_single = mask_non_single_experiment[n_clusters_best]
             self.data["train"][word][TRIALS_KEY] = take_trials_by_mask(self.data["train"][word][TRIALS_KEY],
                                                                        mask_non_single)
+            self.data["train"][word][SESSION_KEY] = take_trials_by_mask(self.data["train"][word][SESSION_KEY],
+                                                                        mask_non_single)
             self.data["train"][word][INTRA_DIST_KEY] = take_matrix_by_mask(dist_matrix, mask_non_single)
 
             if visualize:

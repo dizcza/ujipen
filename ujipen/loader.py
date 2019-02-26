@@ -10,6 +10,8 @@ from dtw_solver import dtw_vectorized
 from preprocess import normalize, correct_slant, filter_duplicates, equally_spaced_points
 from ujipen.ujipen_constants import *
 
+from helper import drop_items
+
 
 def _save_ujipen(data, path=UJIPEN_PKL):
     check_shapes(data)
@@ -34,8 +36,9 @@ def ujipen_download():
 def check_shapes(data):
     for word in data["train"].keys():
         word_points = data["train"][word][TRIALS_KEY]
+        sample_ids = data["train"][word][SESSION_KEY]
         dist_matrix = data["train"][word].get(INTRA_DIST_KEY, None)
-        shapes = [len(word_points)]
+        shapes = [len(word_points), len(sample_ids)]
         if dist_matrix is not None:
             shapes.extend(dist_matrix.shape)
         labels = data["train"][word].get(LABELS_KEY, None)
@@ -57,12 +60,17 @@ def ujipen_read():
         line = lines[line_id]
         if line.startswith('WORD'):
             word = line[5]
+            sample_id = f"{word} {line[7:-1]}"
             if line[7:].startswith('trn'):
                 fold = "train"
             else:
                 fold = "test"
             if word not in data[fold]:
-                data[fold][word] = {TRIALS_KEY: []}
+                data[fold][word] = {
+                    TRIALS_KEY: [],
+                    SESSION_KEY: []
+                }
+            data[fold][word][SESSION_KEY].append(sample_id)
             line_id += 1
             numstrokes = int(lines[line_id][13:])
             assert numstrokes <= 5
@@ -81,6 +89,35 @@ def ujipen_read():
             data[fold][word][TRIALS_KEY].append(points)
         line_id += 1
     return data
+
+
+def ujipen_drop_from_dropped_list(data):
+    dropped_list = []
+    if UJIPEN_DROPPED_LIST.exists():
+        with open(UJIPEN_DROPPED_LIST) as f:
+            dropped_list = f.read().splitlines()
+    dropped = {
+        "train": set(filter(lambda sample_id: 'trn' in sample_id, dropped_list)),
+        "test": set(filter(lambda sample_id: 'tst' in sample_id, dropped_list))
+    }
+    for fold in data.keys():
+        for word, trials in data[fold].items():
+            sample_ids = trials[SESSION_KEY]
+            drop_ids = [i for i in range(len(sample_ids)) if sample_ids[i] in dropped[fold]]
+            if len(drop_ids) == 0:
+                continue
+            trials[TRIALS_KEY] = drop_items(trials[TRIALS_KEY], drop_ids)
+            trials[SESSION_KEY] = drop_items(sample_ids, drop_ids)
+            labels = trials.get(LABELS_KEY, None)
+            if labels is not None:
+                trials[LABELS_KEY] = np.delete(labels, drop_ids)
+            dist_matrix = trials.get(INTRA_DIST_KEY, None)
+            if dist_matrix is not None:
+                for axis in (0, 1):
+                    dist_matrix = np.delete(dist_matrix, drop_ids, axis=axis)
+                trials[INTRA_DIST_KEY] = dist_matrix
+    check_shapes(data)
+    print(f"Dropped {len(dropped_list)} manually selected samples.")
 
 
 def ujipen_correct_slant(data):

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from helper import take_matrix_by_mask, take_trials_by_mask, display
 from ujipen.loader import ujipen_read, _save_ujipen, filter_alphabet, ujipen_correct_slant, ujipen_normalize, \
-    save_intra_dist, check_shapes, ujipen_equally_spaced_points
+    save_intra_dist, check_shapes, ujipen_equally_spaced_points, ujipen_drop_from_dropped_list
 from ujipen.ujipen_constants import *
 
 
@@ -16,11 +16,12 @@ class UJIPen:
             filter_alphabet(data)
             ujipen_correct_slant(data)
             ujipen_normalize(data)
-            ujipen_equally_spaced_points(data)
+            # ujipen_equally_spaced_points(data)
             save_intra_dist(data)
             _save_ujipen(data, path=UJIPEN_PKL)
         with open(UJIPEN_PKL, 'rb') as f:
             self.data = pickle.load(f)
+        ujipen_drop_from_dropped_list(self.data)
         check_shapes(self.data)
 
     @property
@@ -37,7 +38,9 @@ class UJIPen:
         patterns = {}
         for word in self.data["train"].keys():
             patterns[word] = []
-            labels = self.data["train"][word][LABELS_KEY]
+            labels = self.data["train"][word].get(LABELS_KEY, None)
+            if labels is None:
+                continue
             dist_matrix = self.data["train"][word][INTRA_DIST_KEY]
             for label_unique in set(labels):
                 mask_cluster = labels == label_unique
@@ -54,10 +57,11 @@ class UJIPen:
 
     def display(self, word, labels=None):
         if labels is None:
-            labels = self.data["train"][word][LABELS_KEY]
+            labels = self.data["train"][word].get(LABELS_KEY, None)
         word_points = self.data["train"][word][TRIALS_KEY]
         dist_matrix = self.data["train"][word][INTRA_DIST_KEY]
-        display(word_points, labels=labels, dist_matrix=dist_matrix)
+        sample_ids = self.data["train"][word][SESSION_KEY]
+        display(word_points, sample_ids=sample_ids, labels=labels, dist_matrix=dist_matrix)
 
     def show_trial_size(self, patterns_only=False):
         sizes = []
@@ -74,5 +78,5 @@ class UJIPen:
 if __name__ == '__main__':
     ujipen = UJIPen()
     print(f"UJIPen num. of patterns: {ujipen.num_patterns}")
-    ujipen.show_trial_size()
-    # ujipen.display_clustering()
+    # ujipen.show_trial_size()
+    ujipen.display_clustering()
