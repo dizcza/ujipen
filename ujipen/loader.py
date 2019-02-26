@@ -7,7 +7,7 @@ import requests
 from tqdm import tqdm
 
 from dtw_solver import dtw_vectorized
-from preprocess import normalize, correct_slant, filter_duplicates, equally_spaced_points
+from preprocess import normalize, correct_slant, filter_duplicates, equally_spaced_points_patterns
 from ujipen.ujipen_constants import *
 
 from helper import drop_items
@@ -83,11 +83,11 @@ def ujipen_read():
                 stroke_points = line[hashtag_pos + 2:].split(' ')
                 stroke_points = np.asarray(stroke_points, dtype=np.float32).reshape(-1, 2)
                 assert len(stroke_points) == num_points
-                stroke_points = filter_duplicates(stroke_points)
                 points.append(stroke_points)
-            points = np.vstack(points)  # todo handle strokes
+            points = filter_duplicates(points)
             data[fold][word][TRIALS_KEY].append(points)
         line_id += 1
+    check_shapes(data)
     return data
 
 
@@ -139,7 +139,7 @@ def ujipen_equally_spaced_points(data):
         samples = {
             word: trials[TRIALS_KEY] for word, trials in data[fold].items()
         }
-        samples_equally_spaced = equally_spaced_points(samples)
+        samples_equally_spaced = equally_spaced_points_patterns(samples)
         for word in data[fold].keys():
             data[fold][word][TRIALS_KEY] = samples_equally_spaced[word]
 
@@ -166,7 +166,9 @@ def save_intra_dist(data):
         word_points = trials[TRIALS_KEY]
         dist_matrix = np.zeros((len(word_points), len(word_points)), dtype=np.float32)
         for i, anchor in enumerate(tqdm(word_points, desc=f"Word {word}")):
+            anchor = np.vstack(anchor)
             for j, sample in enumerate(word_points[i + 1:], start=i + 1):
+                sample = np.vstack(sample)
                 dist = dtw_vectorized(sample, anchor)[-1, -1]
                 dist /= len(sample) + len(anchor)
                 dist_matrix[i, j] = dist_matrix[j, i] = dist

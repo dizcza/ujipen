@@ -1,5 +1,5 @@
 import math
-from typing import Iterable
+from typing import Iterable, List
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -23,21 +23,35 @@ def drop_items(items: list, drop_ids: Iterable[int]):
     return [items[i] for i in range(len(items)) if i not in drop_ids]
 
 
-def draw_sample(sample: np.ndarray, between_stroke_thr=0.2):
+def draw_sample(sample: List[np.ndarray]):
     colors = ['blue', 'orange', 'cyan', 'black', 'magenta']
     margin = 0.02
-    sample = sample.copy()
-    dv = sample[1:] - sample[:-1]
-    dist = np.linalg.norm(dv, axis=1)
-    corners = np.where(dist > between_stroke_thr)[0]
-    corners += 1
-    sample[:, 1] = sample[:, 1].max() - sample[:, 1]
-    for chunk_id, chunk in enumerate(np.split(sample, corners)):
-        x, y = chunk.T
-        plt.plot(x, y, color=colors[chunk_id % len(colors)])
+    y_max = np.vstack(sample)[:, 1].max()
+    for stroke_id, stroke_points in enumerate(sample):
+        x, y = stroke_points.T
+        y = y_max - y
+        color = colors[stroke_id % len(colors)]
+        plt.plot(x, y, color=color)
+        plt.scatter(x, y, color=color, s=3)
     plt.xlim(left=0 - margin, right=1 + margin)
     plt.ylim(bottom=0 - margin, top=1 + margin)
     plt.axis('off')
+
+
+def create_edge_rectangles_patch(sample: List[np.ndarray], rect_size=(0.03, 0.03)):
+    rect_size = np.asarray(rect_size, dtype=np.float32)
+    rect_colors = []
+    rects = []
+    y_max = np.vstack(sample)[:, 1].max()
+    for stroke_points in sample:
+        stroke_points = stroke_points.copy()
+        stroke_points[:, 1] = y_max - stroke_points[:, 1]
+        for pid in (0, -1):
+            rect_edge = mpatches.Rectangle(stroke_points[pid] - rect_size / 2, *rect_size)
+            rects.append(rect_edge)
+        rect_colors.extend(['g', 'r'])
+    pc = PatchCollection(rects, facecolors=rect_colors)
+    return pc
 
 
 def display(word_points, labels=None, dist_matrix=None):
@@ -69,5 +83,5 @@ def display(word_points, labels=None, dist_matrix=None):
             if i == min_inter_dist_id:
                 rect = mpatches.Rectangle((0, 0), width=1, height=1, fill=False, fc='none', ec='black', lw=2)
                 ax.add_patch(rect)
-        plt.suptitle(f'Label {label}')
+        plt.suptitle(f'Cluster {label}')
     plt.show()

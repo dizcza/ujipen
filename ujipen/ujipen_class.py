@@ -4,11 +4,10 @@ import pickle
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.collections import PatchCollection
 
-from helper import take_matrix_by_mask, take_trials_by_mask, draw_sample
+from helper import take_matrix_by_mask, take_trials_by_mask, draw_sample, create_edge_rectangles_patch
 from ujipen.loader import ujipen_read, _save_ujipen, filter_alphabet, ujipen_correct_slant, ujipen_normalize, \
-    save_intra_dist, check_shapes, ujipen_drop_from_dropped_list
+    save_intra_dist, check_shapes, ujipen_drop_from_dropped_list, ujipen_equally_spaced_points
 from ujipen.ujipen_constants import *
 from ujipen.ujipen_constants import UJIPEN_DROPPED_LIST
 
@@ -32,13 +31,14 @@ def onclick_drop_callback(event):
 
 class UJIPen:
 
-    def __init__(self, force_read=False):
+    def __init__(self, force_read=False, equally_spaced=False):
         if force_read:
             data = ujipen_read()
             filter_alphabet(data)
             ujipen_correct_slant(data)
             ujipen_normalize(data)
-            # ujipen_equally_spaced_points(data)
+            if equally_spaced:
+                ujipen_equally_spaced_points(data)
             save_intra_dist(data)
             _save_ujipen(data, path=UJIPEN_PKL)
         with open(UJIPEN_PKL, 'rb') as f:
@@ -106,9 +106,7 @@ class UJIPen:
             for i, sample in enumerate(cluster_points):
                 ax = plt.subplot(rows, cols, i + 1)
                 draw_sample(sample)
-                rects = [mpatches.Rectangle(sample[pid] - rect_size / 2, *rect_size) for pid in (0, -1)]
-                pc = PatchCollection(rects, facecolors=['g', 'r'])
-                ax.add_collection(pc)
+                ax.add_collection(create_edge_rectangles_patch(sample, rect_size=rect_size))
                 if i == min_inter_dist_id:
                     rect = mpatches.Rectangle((0, 0), width=1, height=1, fill=False, fc='none', ec='black', lw=2)
                     ax.add_patch(rect)

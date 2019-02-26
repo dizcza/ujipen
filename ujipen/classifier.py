@@ -13,9 +13,14 @@ UJIPEN_PRECOMPUTED_DISTANCES_PATH = UJIPEN_DIR / "distances.pkl"
 
 
 def compute_distances(sample, patterns):
+    sample = np.vstack(sample)
     distances = {}
     for word, pattern_trials in patterns.items():
-        distances[word] = [dtw_vectorized(sample, pattern)[-1, -1] for pattern in pattern_trials]
+        distances[word] = []
+        for pattern in pattern_trials:
+            pattern = np.vstack(pattern)
+            dist = dtw_vectorized(sample, pattern)[-1, -1]
+            distances[word].append(dist)
     return distances
 
 

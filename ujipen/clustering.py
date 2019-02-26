@@ -132,7 +132,7 @@ class UJIPenClustering(UJIPen):
 
 
 if __name__ == '__main__':
-    ujipen = UJIPenClustering(force_read=True)
+    ujipen = UJIPenClustering(force_read=True, equally_spaced=True)
     ujipen.dbscan()
     ujipen.cluster(uneven_size_max_ratio=2, visualize=False)
     # ujipen.display_clustering()

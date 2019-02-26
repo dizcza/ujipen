@@ -9,7 +9,7 @@ def load_manual_patterns():
     for filepath in sorted(POINTS_DIR.iterdir()):
         word = filepath.stem
         sample_points = np.loadtxt(filepath, dtype=np.float32, delimiter=',')
-        sample_points = filter_duplicates(sample_points)
+        sample_points = filter_duplicates([sample_points])  # 1 stroke only
         normalize(sample_points)
-        data[word] = [sample_points]
+        data[word] = [sample_points]  # 1 trial per word
     return data

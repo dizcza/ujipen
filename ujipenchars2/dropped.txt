@@ -37,6 +37,9 @@ s trn_UJI_W10-01
 s trn_UJI_W10-02
 t trn_UJI_W10-01
 t trn_UJI_W10-02
+v trn_UJI_W10-01
+v trn_UJI_W10-02
+v trn_UPV_W53-01
 x trn_UPV_W20-01
 x trn_UPV_W25-02
 x trn_UPV_W29-01
