@@ -6,6 +6,7 @@ a trn_UPV_W28-01
 a trn_UPV_W28-02
 d trn_UJI_W09-01
 d trn_UJI_W09-02
+g trn_UJI_W01-01
 g trn_UJI_W04-01
 g trn_UJI_W04-02
 g trn_UJI_W05-02

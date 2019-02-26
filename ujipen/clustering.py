@@ -132,7 +132,8 @@ class UJIPenClustering(UJIPen):
 
 
 if __name__ == '__main__':
-    ujipen = UJIPenClustering(force_read=True, equally_spaced=True)
+    ujipen = UJIPenClustering(force_read=True, equally_spaced=False)
     ujipen.dbscan()
     ujipen.cluster(uneven_size_max_ratio=2, visualize=False)
+    print(f"UJIPen num. of patterns: {ujipen.num_patterns}")
     # ujipen.display_clustering()

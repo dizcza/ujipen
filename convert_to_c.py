@@ -1,4 +1,5 @@
 import string
+import numpy as np
 
 from constants import *
 from preprocess import equally_spaced_points_patterns, is_inside_unit_box
@@ -25,7 +26,7 @@ def convert_to_c(patterns, dtype='float32_t'):
     assert ''.join(sorted(patterns.keys())) == string.ascii_lowercase
     for word in patterns.keys():
         for trial in patterns[word]:
-            assert len(trial) == PATTERN_SIZE
+            assert sum(map(len, trial)) == PATTERN_SIZE
             is_inside_unit_box(trial)
     pattern_coords_decl = lambda suffix: f"const {dtype} PATTERN_COORDS_{suffix}[TOTAL_PATTERNS][PATTERN_SIZE]"
 
@@ -63,7 +64,7 @@ def convert_to_c(patterns, dtype='float32_t'):
     xs, ys = [], []
     for word in patterns.keys():
         for sample in patterns[word]:
-            x, y = sample.T
+            x, y = np.vstack(sample).T
             xs.append(x)
             ys.append(y)
     write_single_coordinates(xs, suffix='X')
