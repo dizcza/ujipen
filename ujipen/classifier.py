@@ -12,6 +12,7 @@ from dtw_solver import dtw_vectorized
 from helper import draw_sample
 from ujipen.ujipen_class import UJIPen
 from ujipen.ujipen_constants import UJIPEN_DIR
+from preprocess import normalize_patterns_q7
 
 UJIPEN_PRECOMPUTED_DISTANCES_PATH = UJIPEN_DIR / "distances.pkl"
 
@@ -43,6 +44,8 @@ def save_distances(fold="train"):
     ujipen = UJIPen()
     patterns = ujipen.get_min_intra_dist_patterns()
     samples = ujipen.get_samples(fold=fold)
+    normalize_patterns_q7(patterns)
+    normalize_patterns_q7(samples)
     distances = {}
     if UJIPEN_PRECOMPUTED_DISTANCES_PATH.exists():
         with open(UJIPEN_PRECOMPUTED_DISTANCES_PATH, 'rb') as f:
@@ -53,6 +56,7 @@ def save_distances(fold="train"):
         for sample in tqdm(sample_trials, desc=f"Computing distances {fold} word '{word_sample}'"):
             sample_distances = compute_distances(sample, patterns)
             distances[fold][word_sample].append(sample_distances)
+        break
     with open(UJIPEN_PRECOMPUTED_DISTANCES_PATH, 'wb') as f:
         pickle.dump(distances, f)
 
@@ -155,8 +159,29 @@ def test(fold="train", k_neighbors=5, use_cached=True):
     plt.show()
 
 
+def show_distances_hist(k_neighbors=5):
+    with open(UJIPEN_PRECOMPUTED_DISTANCES_PATH, 'rb') as f:
+        distances = pickle.load(f)["train"]
+    distances_same_word = []
+    for word_sample in distances.keys():
+        for distances_to_patterns in distances[word_sample]:
+            closest_label = knn_precomputed(distances_to_patterns, k_neighbors=k_neighbors)
+            distances_same_word.append(distances_to_patterns[closest_label])
+    distances = np.hstack(distances_same_word)
+    distances = distances[distances > 0]
+    distances = np.sort(distances)
+    print(f"DTW sum distances: {distances.mean():.3f} +- {distances.std():.3f} "
+          f"(min={distances.min()}, max={distances.max()})")
+    plt.hist(distances, bins=100)
+    plt.xscale('log')
+    plt.show()
+
+
 if __name__ == '__main__':
     # save_distances("train")
-    test_knn_correctness()
-    # show_knn(k_neighbors=5)
-    test(use_cached=True, k_neighbors=1)
+    show_distances_hist()
+    quit()
+    # quit()
+    # test_knn_correctness()
+    show_knn(k_neighbors=5)
+    # test(use_cached=True, k_neighbors=1)

@@ -3,7 +3,7 @@ from typing import Dict, List
 
 import numpy as np
 
-from constants import VERT_SLANGE_ANGLE, PATTERN_SIZE
+from constants import VERT_SLANT_ANGLE, PATTERN_SIZE
 
 
 def filter_duplicates(points: List[np.ndarray]):
@@ -111,7 +111,7 @@ def correct_slant(points: List[np.ndarray]):
     Inplace slant correction.
     :param points: list of strokes of XY points
     """
-    vert_slant_radians = math.radians(VERT_SLANGE_ANGLE)
+    vert_slant_radians = math.radians(VERT_SLANT_ANGLE)
     vert_slant_cotang = 1 / math.tan(vert_slant_radians)
     segment_vectors = [np.diff(stroke_points, axis=0) for stroke_points in points]
     segment_vectors = np.vstack(segment_vectors)
@@ -130,27 +130,50 @@ def correct_slant(points: List[np.ndarray]):
         stroke_points[:, 0] = stroke_points[:, 0] + stroke_points[:, 1] * shear
 
 
-def is_inside_unit_box(points: List[np.ndarray], eps=1e-6) -> bool:
+def is_inside_box(points: List[np.ndarray], box, eps=1e-6) -> bool:
     points = np.vstack(points)
-    return np.logical_and(points >= -eps, points <= 1. + eps).all()
+    box = np.asarray(box, dtype=np.float32)
+    return np.logical_and(box[0] - eps <= points, points <= box[1] + eps).all()
 
 
-def normalize(points: List[np.ndarray], keep_aspect_ratio=True):
+def normalize(points: List[np.ndarray], box=((0, 0), (1, 1)), keep_aspect_ratio=True):
     """
-    Inplace centering inside a unit box.
+    Inplace centering inside a box.
     :param points: list of strokes of XY points
+    :param box: normalize points to this bounding box (top left, bottom right)
     :param keep_aspect_ratio: keep aspect ratio unchanged
     """
     points_merged = np.vstack(points)
     x, y = points_merged.T
     ymin, xmin, ymax, xmax = y.min(), x.min(), y.max(), x.max()
-    scale_x = 1 / (xmax - xmin)
-    scale_y = 1 / (ymax - ymin)
+    box = np.asarray(box, dtype=np.float32)
+    box_width, box_height = box[1] - box[0]
+    box_center = np.mean(box, axis=0)
+    scale_x = box_width / (xmax - xmin)
+    scale_y = box_height / (ymax - ymin)
     if keep_aspect_ratio:
         scale_x = scale_y = min(scale_x, scale_y)
     xc = (xmin + xmax) / 2
     yc = (ymin + ymax) / 2
     for stroke_points in points:
-        stroke_points[:, 0] = 0.5 + (stroke_points[:, 0] - xc) * scale_x
-        stroke_points[:, 1] = 0.5 + (stroke_points[:, 1] - yc) * scale_y
-    assert is_inside_unit_box(points)
+        stroke_points[:, 0] = box_center[0] + (stroke_points[:, 0] - xc) * scale_x
+        stroke_points[:, 1] = box_center[1] + (stroke_points[:, 1] - yc) * scale_y
+    assert is_inside_box(points, box=box)
+
+
+def normalize_patterns_fixed_point(patterns: Dict[str, List[List[np.ndarray]]], q_t=7):
+    assert q_t in (7, 15, 31), f"Invalid fixed point format: Q1.{q_t}"
+    resolution = 2 ** -q_t
+    box = (-1, -1), (1 - resolution, 1 - resolution)
+    patterns = patterns.copy()
+    patterns_qt = {}
+    for word in patterns.keys():
+        patterns_qt[word] = []
+        for pattern in patterns[word]:
+            normalize(pattern, box=box)
+            points_qt = []
+            for stroke_points in pattern:
+                stroke_points_qt = (stroke_points / resolution).astype(dtype=f'int{q_t + 1}')
+                points_qt.append(stroke_points_qt)
+            patterns_qt[word].append(points_qt)
+    return patterns_qt

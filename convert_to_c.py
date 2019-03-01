@@ -2,11 +2,28 @@ import string
 import numpy as np
 
 from constants import *
-from preprocess import equally_spaced_points_patterns, is_inside_unit_box
+from preprocess import equally_spaced_points_patterns, normalize_patterns_fixed_point
 from ujipen.ujipen_class import UJIPen
 from manual.loader import load_manual_patterns
 
-H_FILE_HEADER = f"""/*
+
+def convert_to_c(patterns, q7_t=False):
+    patterns = equally_spaced_points_patterns(patterns)
+    if q7_t:
+        patterns = normalize_patterns_fixed_point(patterns)
+    total_patterns = sum(map(len, patterns.values()))
+    assert ''.join(sorted(patterns.keys())) == string.ascii_lowercase
+    for word in patterns.keys():
+        for trial in patterns[word]:
+            assert sum(map(len, trial)) == PATTERN_SIZE
+    pattern_coords_decl = lambda suffix: f"const float_coord PATTERN_COORDS_{suffix}[TOTAL_PATTERNS][PATTERN_SIZE]"
+
+    define_q7_t = "#define CHAR_PATTERNS_DATATYPE_Q7"
+    if not q7_t:
+        define_q7_t = '//' + define_q7_t
+
+    h_header = f"""
+/*
  * char_patterns.h
  *
  *  Created on: Jan 31, 2019
@@ -16,32 +33,45 @@ H_FILE_HEADER = f"""/*
 #ifndef CHAR_PATTERNS_H_
 #define CHAR_PATTERNS_H_
 
+// do not modify this
+{define_q7_t}
+
 #define PATTERN_SIZE      {PATTERN_SIZE}
+#define TOTAL_PATTERNS    {total_patterns}
+
+#include <stdint.h>
+#include "arm_math.h"
+
+#ifdef CHAR_PATTERNS_DATATYPE_Q7
+#define CHAR_PATTERNS_RESOLUTION  (0.0078125f)
+
+typedef q7_t float_coord;
+#else
+#define CHAR_PATTERNS_RESOLUTION  (0.0f)
+
+typedef float32_t float_coord;
+#endif  /* CHAR_PATTERNS_DATATYPE_Q7 */
+
+typedef struct CharPattern {{
+    float_coord *xcoords, *ycoords;
+    uint32_t size;
+}} CharPattern;
+
+typedef struct CharPattern_PredictedInfo {{
+    char predicted_char;
+    uint32_t duration;
+    float32_t distance;
+}} CharPattern_PredictedInfo;
+
+extern const uint8_t PATTERN_LABEL[TOTAL_PATTERNS];
+extern {pattern_coords_decl('X')};
+extern {pattern_coords_decl('Y')};
+
+#endif /* CHAR_PATTERNS_H_ */
 """
 
-
-def convert_to_c(patterns, dtype='float32_t'):
-    patterns = equally_spaced_points_patterns(patterns)
-    total_patterns = sum(map(len, patterns.values()))
-    assert ''.join(sorted(patterns.keys())) == string.ascii_lowercase
-    for word in patterns.keys():
-        for trial in patterns[word]:
-            assert sum(map(len, trial)) == PATTERN_SIZE
-            is_inside_unit_box(trial)
-    pattern_coords_decl = lambda suffix: f"const {dtype} PATTERN_COORDS_{suffix}[TOTAL_PATTERNS][PATTERN_SIZE]"
-
-    h_lines = [
-        H_FILE_HEADER,
-        f"#define TOTAL_PATTERNS    {total_patterns}\n"
-        "\n#include <stdint.h>"
-        "\n#include \"arm_math.h\"\n"
-        "\nextern const uint8_t PATTERN_LABEL[TOTAL_PATTERNS];\n",
-        f"\nextern {pattern_coords_decl('X')};",
-        f"\nextern {pattern_coords_decl('Y')};",
-        "\n\n#endif /* CHAR_PATTERNS_H_ */"
-    ]
     with open(CHAR_PATTERNS_H, 'w') as f:
-        f.write(''.join(h_lines))
+        f.write(h_header)
 
     labels_true = []
     for word in patterns.keys():
@@ -55,7 +85,10 @@ def convert_to_c(patterns, dtype='float32_t'):
     def write_single_coordinates(one_dim_coords: list, suffix: str):
         c_lines.append(f"\n{pattern_coords_decl(suffix)} = {{")
         for x in one_dim_coords:
-            x = [f"{xval:.3f}f" for xval in x]
+            if q7_t:
+                x = map(str, x)
+            else:
+                x = [f"{xval:.3f}f" for xval in x]
             c_lines.append('\n\t{')
             c_lines.append(', '.join(x))
             c_lines.append('},')
@@ -78,4 +111,4 @@ def convert_to_c(patterns, dtype='float32_t'):
 if __name__ == '__main__':
     patterns = UJIPen().get_min_intra_dist_patterns()
     # patterns = load_manual_patterns()
-    convert_to_c(patterns)
+    convert_to_c(patterns, q7_t=True)
