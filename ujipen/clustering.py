@@ -10,6 +10,13 @@ from ujipen.ujipen_class import UJIPen
 from ujipen.ujipen_constants import *
 
 
+def ujipen_cluster(equally_spaced=False):
+    ujipen = UJIPenClustering(force_read=True, equally_spaced=equally_spaced)
+    ujipen.dbscan()
+    ujipen.cluster(uneven_size_max_ratio=2)
+    print(f"UJIPen num. of patterns: {ujipen.num_patterns}")
+
+
 class UJIPenClustering(UJIPen):
 
     def drop_labels(self, word: str, labels_drop):
@@ -132,8 +139,5 @@ class UJIPenClustering(UJIPen):
 
 
 if __name__ == '__main__':
-    ujipen = UJIPenClustering(force_read=True, equally_spaced=False)
-    ujipen.dbscan()
-    ujipen.cluster(uneven_size_max_ratio=2, visualize=False)
-    print(f"UJIPen num. of patterns: {ujipen.num_patterns}")
+    ujipen_cluster()
     # ujipen.display_clustering()

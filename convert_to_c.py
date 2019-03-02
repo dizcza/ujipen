@@ -1,9 +1,11 @@
 import string
 import numpy as np
+from typing import List
 
 from constants import *
 from preprocess import equally_spaced_points_patterns, normalize_patterns_fixed_point
 from ujipen.ujipen_class import UJIPen
+from ujipen.clustering import ujipen_cluster
 from manual.loader import load_manual_patterns
 
 
@@ -43,11 +45,11 @@ def convert_to_c(patterns, q7_t=False):
 #include "arm_math.h"
 
 #ifdef CHAR_PATTERNS_DATATYPE_Q7
-#define CHAR_PATTERNS_RESOLUTION  (0.0078125f)
+#define CHAR_PATTERNS_RESOLUTION  0.0078125f
 
 typedef q7_t float_coord;
 #else
-#define CHAR_PATTERNS_RESOLUTION  (0.0f)
+#define CHAR_PATTERNS_RESOLUTION  0.0f
 
 typedef float32_t float_coord;
 #endif  /* CHAR_PATTERNS_DATATYPE_Q7 */
@@ -82,11 +84,12 @@ extern {pattern_coords_decl('Y')};
         f"\n\nconst uint8_t PATTERN_LABEL[TOTAL_PATTERNS] = \"{labels_true}\";\n",
     ]
 
-    def write_single_coordinates(one_dim_coords: list, suffix: str):
+    def write_single_coordinates(one_dim_coords: List[np.ndarray], suffix: str):
         c_lines.append(f"\n{pattern_coords_decl(suffix)} = {{")
         for x in one_dim_coords:
             if q7_t:
-                x = map(str, x)
+                x = x & 0xff
+                x = [f"0x{xval:02X}" for xval in x]
             else:
                 x = [f"{xval:.3f}f" for xval in x]
             c_lines.append('\n\t{')
@@ -109,6 +112,7 @@ extern {pattern_coords_decl('Y')};
 
 
 if __name__ == '__main__':
+    ujipen_cluster()
     patterns = UJIPen().get_min_intra_dist_patterns()
     # patterns = load_manual_patterns()
     convert_to_c(patterns, q7_t=True)
