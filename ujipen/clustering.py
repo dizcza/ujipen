@@ -139,5 +139,6 @@ class UJIPenClustering(UJIPen):
 
 
 if __name__ == '__main__':
-    ujipen_cluster()
-    # ujipen.display_clustering()
+    # ujipen_cluster()
+    ujipen = UJIPenClustering()
+    ujipen.display_clustering()

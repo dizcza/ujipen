@@ -136,7 +136,7 @@ def is_inside_box(points: List[np.ndarray], box, eps=1e-6) -> bool:
     return np.logical_and(box[0] - eps <= points, points <= box[1] + eps).all()
 
 
-def normalize(points: List[np.ndarray], box=((0, 0), (1, 1)), keep_aspect_ratio=True):
+def normalize(points: List[np.ndarray], box=((-1, -1), (1, 1)), keep_aspect_ratio=True):
     """
     Inplace centering inside a box.
     :param points: list of strokes of XY points

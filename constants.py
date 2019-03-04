@@ -1,6 +1,6 @@
 from pathlib import Path
 
-PATTERN_SIZE = 50
+PATTERN_SIZE = 30
 
 CHAR_PATTERNS_H = Path.home().joinpath("microcontrollers/workspace/f429-chars/TrueSTUDIO/f429-chars/DTW/char_patterns.h")
 CHAR_PATTERNS_C = CHAR_PATTERNS_H.with_suffix('.c')
