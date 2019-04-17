@@ -6,6 +6,7 @@ from constants import *
 from preprocess import equally_spaced_points_patterns, normalize_patterns_fixed_point
 from ujipen.ujipen_class import UJIPen
 from ujipen.clustering import ujipen_cluster
+from helper import check_unique_patterns
 from manual.loader import load_manual_patterns
 
 
@@ -14,10 +15,7 @@ def convert_to_c(patterns, q7_t=False):
     if q7_t:
         patterns = normalize_patterns_fixed_point(patterns)
     total_patterns = sum(map(len, patterns.values()))
-    assert ''.join(sorted(patterns.keys())) == string.ascii_lowercase
-    for word in patterns.keys():
-        for trial in patterns[word]:
-            assert sum(map(len, trial)) == PATTERN_SIZE
+    assert check_unique_patterns(patterns)
     pattern_coords_decl = lambda suffix: f"const float_coord PATTERN_COORDS_{suffix}[TOTAL_PATTERNS][PATTERN_SIZE]"
 
     define_q7_t = "#define CHAR_PATTERNS_DATATYPE_Q7"

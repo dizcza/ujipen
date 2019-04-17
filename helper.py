@@ -1,10 +1,13 @@
 import math
+import string
 from typing import Iterable, List
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import PatchCollection
+
+from constants import PATTERN_SIZE
 
 
 def take_matrix_by_mask(dist_matrix: np.ndarray, mask_take):
@@ -85,3 +88,11 @@ def display(word_points, labels=None, dist_matrix=None):
                 ax.add_patch(rect)
         plt.suptitle(f'Cluster {label}')
     plt.show()
+
+
+def check_unique_patterns(patterns: dict, n_points=PATTERN_SIZE) -> bool:
+    verified = ''.join(sorted(patterns.keys())) == string.ascii_lowercase
+    for word in patterns.keys():
+        for trial in patterns[word]:
+            verified &= sum(map(len, trial)) == n_points
+    return verified
