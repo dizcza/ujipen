@@ -8,5 +8,3 @@ UJIPEN_DROPPED_LIST = UJIPEN_DIR / "dropped.txt"
 
 TRIALS_KEY = "trials"  # samples
 SESSION_KEY = "session"
-INTRA_DIST_KEY = "intra-dist"  # intra-class dist matrix
-LABELS_KEY = "clusters"  # sample cluster ID

@@ -28,13 +28,7 @@ def check_shapes(data):
     for word in data["train"].keys():
         word_points = data["train"][word][TRIALS_KEY]
         sample_ids = data["train"][word][SESSION_KEY]
-        dist_matrix = data["train"][word].get(INTRA_DIST_KEY, None)
         shapes = [len(word_points), len(sample_ids)]
-        if dist_matrix is not None:
-            shapes.extend(dist_matrix.shape)
-        labels = data["train"][word].get(LABELS_KEY, None)
-        if labels is not None:
-            shapes.append(len(labels))
         assert len(set(shapes)) == 1  # all equal
 
 
@@ -99,14 +93,6 @@ def ujipen_drop_from_dropped_list(data):
                 continue
             trials[TRIALS_KEY] = drop_items(trials[TRIALS_KEY], drop_ids)
             trials[SESSION_KEY] = drop_items(sample_ids, drop_ids)
-            labels = trials.get(LABELS_KEY, None)
-            if labels is not None:
-                trials[LABELS_KEY] = np.delete(labels, drop_ids)
-            dist_matrix = trials.get(INTRA_DIST_KEY, None)
-            if dist_matrix is not None:
-                for axis in (0, 1):
-                    dist_matrix = np.delete(dist_matrix, drop_ids, axis=axis)
-                trials[INTRA_DIST_KEY] = dist_matrix
     check_shapes(data)
     print(f"Dropped {len(dropped_list)} manually selected samples.")
 

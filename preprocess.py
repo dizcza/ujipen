@@ -159,21 +159,3 @@ def normalize(points: List[np.ndarray], box=((-1, -1), (1, 1)), keep_aspect_rati
         stroke_points[:, 0] = box_center[0] + (stroke_points[:, 0] - xc) * scale_x
         stroke_points[:, 1] = box_center[1] + (stroke_points[:, 1] - yc) * scale_y
     assert is_inside_box(points, box=box)
-
-
-def normalize_patterns_fixed_point(patterns: Dict[str, List[List[np.ndarray]]], q_t=7):
-    assert q_t in (7, 15, 31), f"Invalid fixed point format: Q1.{q_t}"
-    resolution = 2 ** -q_t
-    box = (-1, -1), (1 - resolution, 1 - resolution)
-    patterns = patterns.copy()
-    patterns_qt = {}
-    for word in patterns.keys():
-        patterns_qt[word] = []
-        for pattern in patterns[word]:
-            normalize(pattern, box=box)
-            points_qt = []
-            for stroke_points in pattern:
-                stroke_points_qt = (stroke_points / resolution).astype(dtype=f'int{q_t + 1}')
-                points_qt.append(stroke_points_qt)
-            patterns_qt[word].append(points_qt)
-    return patterns_qt
