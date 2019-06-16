@@ -12,7 +12,6 @@ from dtw_solver import dtw_vectorized
 from helper import draw_sample
 from ujipen.ujipen_class import UJIPen
 from ujipen.ujipen_constants import UJIPEN_DIR
-from preprocess import normalize_patterns_q7
 
 UJIPEN_PRECOMPUTED_DISTANCES_PATH = UJIPEN_DIR / "distances.pkl"
 
@@ -44,8 +43,6 @@ def save_distances(fold="train"):
     ujipen = UJIPen()
     patterns = ujipen.get_min_intra_dist_patterns()
     samples = ujipen.get_samples(fold=fold)
-    normalize_patterns_q7(patterns)
-    normalize_patterns_q7(samples)
     distances = {}
     if UJIPEN_PRECOMPUTED_DISTANCES_PATH.exists():
         with open(UJIPEN_PRECOMPUTED_DISTANCES_PATH, 'rb') as f:

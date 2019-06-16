@@ -136,15 +136,16 @@ class UJIPen:
             plt.suptitle(f"Word '{word}', cluster {label}")
         plt.show()
 
-    def show_trial_size(self, patterns_only=False):
-        sizes = []
-        if patterns_only:
-            samples = self.get_min_intra_dist_patterns()
-        else:
-            samples = self.get_samples()
+    def show_strokes_count_hist(self):
+        strokes_count = []
+        samples = self.get_samples()
         for word, trials in samples.items():
-            sizes.extend(map(len, trials))
-        plt.hist(sizes)
+            strokes_count.extend(map(len, trials))
+        plt.hist(strokes_count)
+        plt.xlabel("# of strokes in a word")
+        plt.ylabel("# of data points that have such a num. of strokes")
+        plt.xticks(ticks=range(1, 1 + max(strokes_count)))
+        plt.title("Distribution of num. of strokes per word")
         plt.show()
 
 
