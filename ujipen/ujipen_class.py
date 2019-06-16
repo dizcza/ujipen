@@ -5,6 +5,7 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+import warnings
 
 from dtw_solver import dtw_vectorized
 from helper import take_matrix_by_mask, take_trials_by_mask, draw_sample, create_edge_rectangles_patch
@@ -92,6 +93,8 @@ class UJIPen:
                 points_cluster = take_trials_by_mask(self.data["train"][word][TRIALS_KEY], mask_cluster)
                 best_sample_id = dist_matrix_cluster.sum(axis=0).argmin()
                 patterns[word].append(points_cluster[best_sample_id])
+        if len(patterns['a']) == 0:
+            warnings.warn("Empty patterns. Please run `ujipen_cluster` from clustering.py")
         return patterns
 
     def get_samples(self, fold="train"):
