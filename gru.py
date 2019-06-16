@@ -44,7 +44,7 @@ def train(ujipen: UJIPen, n_input=PATTERN_SIZE, n_hidden=50):
                       verbose=0)
     history = history.history
     accuracy_train = history['acc'][-1]
-    print(f"Loss: {history['loss'][-1]}, accuracy: train={accuracy_train:.4f}, val={history['val_acc'][-1]}")
+    print(f"Loss: {history['loss'][-1]:.5f}, accuracy: train={accuracy_train:.5f}, val={history['val_acc'][-1]:.5f}")
     MODELS_DIR.mkdir(exist_ok=True)
     model_path = str(MODELS_DIR / f'GRU_input-{n_input}_hidden-{n_hidden}_acc-{accuracy_train:.4f}.h5')
     gru.save(model_path)
