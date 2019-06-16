@@ -4,10 +4,12 @@ import pickle
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
+from dtw_solver import dtw_vectorized
 from helper import take_matrix_by_mask, take_trials_by_mask, draw_sample, create_edge_rectangles_patch
-from ujipen.loader import ujipen_read, _save_ujipen, filter_alphabet, ujipen_correct_slant, ujipen_normalize, \
-    save_intra_dist, check_shapes, ujipen_drop_from_dropped_list, ujipen_equally_spaced_points
+from ujipen.loader import ujipen_read, filter_alphabet, ujipen_correct_slant, ujipen_normalize, check_shapes, \
+    ujipen_drop_from_dropped_list
 from ujipen.ujipen_constants import *
 from ujipen.ujipen_constants import UJIPEN_DROPPED_LIST
 
@@ -31,16 +33,15 @@ def onclick_drop_callback(event):
 
 class UJIPen:
 
-    def __init__(self, force_read=False, equally_spaced=False):
+    def __init__(self, force_read=False):
         if force_read:
             data = ujipen_read()
             filter_alphabet(data)
             ujipen_correct_slant(data)
             ujipen_normalize(data)
-            if equally_spaced:
-                ujipen_equally_spaced_points(data)
-            save_intra_dist(data)
-            _save_ujipen(data, path=UJIPEN_PKL)
+            self.data = data
+            self.save()
+            self.save_intra_dist()
         with open(UJIPEN_PKL, 'rb') as f:
             self.data = pickle.load(f)
         ujipen_drop_from_dropped_list(self.data)
@@ -51,6 +52,39 @@ class UJIPen:
         patterns = self.get_min_intra_dist_patterns()
         total_patterns = sum(map(len, patterns.values()))
         return total_patterns
+
+    def save(self):
+        check_shapes(self.data)
+        with open(UJIPEN_PKL, 'wb') as f:
+            pickle.dump(self.data, f)
+
+    def save_intra_dist(self):
+        intra_dist = {}  # todo remove this hack
+        if UJIPEN_INTRA_DIST_PATH.exists():
+            with open(UJIPEN_INTRA_DIST_PATH, 'rb') as f:
+                intra_dist = pickle.load(f)
+            for word in self.data["train"].keys():
+                self.data["train"][word][INTRA_DIST_KEY] = intra_dist[word]
+            self.save()
+            return
+
+        for word, trials in self.data["train"].items():
+            if INTRA_DIST_KEY in self.data["train"][word]:
+                continue
+            word_points = trials[TRIALS_KEY]
+            dist_matrix = np.zeros((len(word_points), len(word_points)), dtype=np.float32)
+            for i, anchor in enumerate(tqdm(word_points, desc=f"Word {word}")):
+                anchor = np.vstack(anchor)
+                for j, sample in enumerate(word_points[i + 1:], start=i + 1):
+                    sample = np.vstack(sample)
+                    dist = dtw_vectorized(sample, anchor)[-1, -1]
+                    dist /= len(sample) + len(anchor)
+                    dist_matrix[i, j] = dist_matrix[j, i] = dist
+            self.data["train"][word][INTRA_DIST_KEY] = dist_matrix
+            intra_dist[word] = dist_matrix
+        with open(UJIPEN_INTRA_DIST_PATH, 'wb') as f:
+            pickle.dump(intra_dist, f)
+        self.save()
 
     def display_clustering(self, drop_onclick=False):
         for word in self.data["train"].keys():
@@ -111,7 +145,7 @@ class UJIPen:
                     rect = mpatches.Rectangle((0, 0), width=1, height=1, fill=False, fc='none', ec='black', lw=2)
                     ax.add_patch(rect)
                 plt.title(cluster_sample_ids[i], fontsize=5)
-            plt.suptitle(f'Label {label}')
+            plt.suptitle(f"Word '{word}', cluster {label}")
         plt.show()
 
     def show_trial_size(self, patterns_only=False):
@@ -127,7 +161,8 @@ class UJIPen:
 
 
 if __name__ == '__main__':
-    ujipen = UJIPen()
+    ujipen = UJIPen(force_read=True)
+    ujipen.display('f')
     print(f"UJIPen num. of patterns: {ujipen.num_patterns}")
     # ujipen.show_trial_size()
-    ujipen.display_clustering(drop_onclick=True)
+    ujipen.display_clustering(drop_onclick=False)

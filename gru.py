@@ -5,19 +5,21 @@ from keras import layers, models
 
 from constants import *
 from helper import check_unique_patterns
-from preprocess import equally_spaced_points_patterns
+from preprocess import equally_spaced_points_patterns, is_inside_box
 from ujipen.ujipen_class import UJIPen
 
 
 def concat_samples(samples: Dict[str, List[List[np.ndarray]]]):
     labels = []
     data = []
-    for word in samples.keys():
-        labels.extend([ord(word) - ord('a')] * len(samples[word]))
-        for word_sample in samples[word]:
+    for letter in samples.keys():
+        letter_ord = ord(letter) - ord('a')
+        labels.extend([letter_ord] * len(samples[letter]))
+        for word_sample in samples[letter]:
             word_sample = np.vstack(word_sample)
             data.append(word_sample)
     data = np.stack(data, axis=0)
+    assert is_inside_box(data, box=((-1, -1), (1, 1)))
     labels = np.array(labels)
     print(f"Data: {data.shape}, labels: {labels.shape}")
     return data, labels
@@ -44,7 +46,7 @@ def train(ujipen: UJIPen, n_input=PATTERN_SIZE, n_hidden=50):
     accuracy_train = history['acc'][-1]
     print(f"Loss: {history['loss'][-1]}, accuracy: train={accuracy_train:.4f}, val={history['val_acc'][-1]}")
     MODELS_DIR.mkdir(exist_ok=True)
-    model_path = str(MODELS_DIR / f'GRU_input={n_input}_hidden={n_hidden}_acc={accuracy_train:.4f}.h5')
+    model_path = str(MODELS_DIR / f'GRU_input-{n_input}_hidden-{n_hidden}_acc-{accuracy_train:.4f}.h5')
     gru.save(model_path)
     print(f"Saved trained model to {model_path}")
 

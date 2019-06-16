@@ -5,13 +5,12 @@ import numpy as np
 from sklearn.cluster import AgglomerativeClustering, DBSCAN
 
 from helper import take_matrix_by_mask, take_trials_by_mask, drop_items
-from ujipen.loader import _save_ujipen
 from ujipen.ujipen_class import UJIPen
 from ujipen.ujipen_constants import *
 
 
-def ujipen_cluster(equally_spaced=False):
-    ujipen = UJIPenClustering(force_read=True, equally_spaced=equally_spaced)
+def ujipen_cluster():
+    ujipen = UJIPenClustering(force_read=True)
     ujipen.dbscan()
     ujipen.cluster(uneven_size_max_ratio=2)
     print(f"UJIPen num. of patterns: {ujipen.num_patterns}")
@@ -31,7 +30,7 @@ class UJIPenClustering(UJIPen):
         for axis in (0, 1):
             dist_matrix = np.delete(dist_matrix, indices_drop, axis=axis)
         self.data["train"][word][INTRA_DIST_KEY] = dist_matrix
-        _save_ujipen(self.data)
+        self.save()
         print(f"Word {word}: dropped {labels_drop}")
 
     @staticmethod
@@ -124,7 +123,7 @@ class UJIPenClustering(UJIPen):
                 plt.title(f"Word {word}")
                 plt.show()
                 self.display(word)
-        _save_ujipen(self.data)
+        self.save()
 
     def dbscan(self, scale=0.5, display_outliers=False):
         for word in self.data["train"].keys():
@@ -139,6 +138,6 @@ class UJIPenClustering(UJIPen):
 
 
 if __name__ == '__main__':
-    # ujipen_cluster()
-    ujipen = UJIPenClustering()
+    ujipen_cluster()
+    ujipen = UJIPenClustering(force_read=True)
     ujipen.display_clustering()

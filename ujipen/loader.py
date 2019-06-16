@@ -1,4 +1,3 @@
-import pickle
 import string
 import warnings
 
@@ -6,17 +5,9 @@ import numpy as np
 import requests
 from tqdm import tqdm
 
-from dtw_solver import dtw_vectorized
+from helper import drop_items
 from preprocess import normalize, correct_slant, filter_duplicates, equally_spaced_points_patterns
 from ujipen.ujipen_constants import *
-
-from helper import drop_items
-
-
-def _save_ujipen(data, path=UJIPEN_PKL):
-    check_shapes(data)
-    with open(path, 'wb') as f:
-        pickle.dump(data, f)
 
 
 def ujipen_download():
@@ -149,31 +140,3 @@ def filter_alphabet(data, alphabet=string.ascii_lowercase):
         data[fold] = {
             word: data[fold][word] for word in alphabet
         }
-
-
-def save_intra_dist(data):
-    intra_dist = {}  # todo remove this hack
-    if UJIPEN_INTRA_DIST_PATH.exists():
-        with open(UJIPEN_INTRA_DIST_PATH, 'rb') as f:
-            intra_dist = pickle.load(f)
-        for word in data["train"].keys():
-            data["train"][word][INTRA_DIST_KEY] = intra_dist[word]
-        return
-
-    for word, trials in data["train"].items():
-        if INTRA_DIST_KEY in data["train"][word]:
-            continue
-        word_points = trials[TRIALS_KEY]
-        dist_matrix = np.zeros((len(word_points), len(word_points)), dtype=np.float32)
-        for i, anchor in enumerate(tqdm(word_points, desc=f"Word {word}")):
-            anchor = np.vstack(anchor)
-            for j, sample in enumerate(word_points[i + 1:], start=i + 1):
-                sample = np.vstack(sample)
-                dist = dtw_vectorized(sample, anchor)[-1, -1]
-                dist /= len(sample) + len(anchor)
-                dist_matrix[i, j] = dist_matrix[j, i] = dist
-        data["train"][word][INTRA_DIST_KEY] = dist_matrix
-        intra_dist[word] = dist_matrix
-    _save_ujipen(data)
-    with open(UJIPEN_INTRA_DIST_PATH, 'wb') as f:
-        pickle.dump(intra_dist, f)

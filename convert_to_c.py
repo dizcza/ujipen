@@ -113,4 +113,4 @@ if __name__ == '__main__':
     ujipen_cluster()
     patterns = UJIPen().get_min_intra_dist_patterns()
     # patterns = load_manual_patterns()
-    convert_to_c(patterns, q7_t=True)
+    convert_to_c(patterns, q7_t=False)

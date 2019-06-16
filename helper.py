@@ -29,15 +29,18 @@ def drop_items(items: list, drop_ids: Iterable[int]):
 def draw_sample(sample: List[np.ndarray]):
     colors = ['blue', 'orange', 'cyan', 'black', 'magenta']
     margin = 0.02
-    y_max = np.vstack(sample)[:, 1].max()
+    sample_stacked = np.vstack(sample)
+    x_min, y_min = sample_stacked.min(axis=0)
+    x_max, y_max = sample_stacked.max(axis=0)
+
     for stroke_id, stroke_points in enumerate(sample):
         x, y = stroke_points.T
         y = y_max - y
         color = colors[stroke_id % len(colors)]
         plt.plot(x, y, color=color)
         plt.scatter(x, y, color=color, s=3)
-    plt.xlim(left=0 - margin, right=1 + margin)
-    plt.ylim(bottom=0 - margin, top=1 + margin)
+    plt.xlim(left=x_min - margin, right=x_max + margin)
+    plt.ylim(bottom=0 - margin, top=y_max - y_min + margin)
     plt.axis('off')
 
 
