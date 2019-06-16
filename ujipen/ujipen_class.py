@@ -59,15 +59,6 @@ class UJIPen:
             pickle.dump(self.data, f)
 
     def save_intra_dist(self):
-        intra_dist = {}  # todo remove this hack
-        if UJIPEN_INTRA_DIST_PATH.exists():
-            with open(UJIPEN_INTRA_DIST_PATH, 'rb') as f:
-                intra_dist = pickle.load(f)
-            for word in self.data["train"].keys():
-                self.data["train"][word][INTRA_DIST_KEY] = intra_dist[word]
-            self.save()
-            return
-
         for word, trials in self.data["train"].items():
             if INTRA_DIST_KEY in self.data["train"][word]:
                 continue
@@ -81,9 +72,6 @@ class UJIPen:
                     dist /= len(sample) + len(anchor)
                     dist_matrix[i, j] = dist_matrix[j, i] = dist
             self.data["train"][word][INTRA_DIST_KEY] = dist_matrix
-            intra_dist[word] = dist_matrix
-        with open(UJIPEN_INTRA_DIST_PATH, 'wb') as f:
-            pickle.dump(intra_dist, f)
         self.save()
 
     def display_clustering(self, drop_onclick=False):
