@@ -1,27 +1,42 @@
 import string
-import warnings
+from urllib.request import urlretrieve
 
 import numpy as np
-import requests
 from tqdm import tqdm
 
 from helper import drop_items
-from preprocess import normalize, correct_slant, filter_duplicates, equally_spaced_points_patterns
+from preprocess import normalize, correct_slant, filter_duplicates, \
+    equally_spaced_points_patterns
 from ujipen.ujipen_constants import *
 
 
-def ujipen_download():
+class TqdmUpTo(tqdm):
+    """
+    Provides `update_to(n)` which uses `tqdm.update(delta_n)`.
+    Original implementation:
+    https://github.com/tqdm/tqdm/blob/master/examples/tqdm_wget.py
+    """
+
+    def update_to(self, b=1, bsize=1, tsize=None):
+        """
+        b : int, optional
+            Number of blocks transferred so far [default: 1].
+        bsize : int, optional
+            Size of each block (in tqdm units) [default: 1].
+        tsize : int, optional
+            Total size (in tqdm units). If [default: None] remains unchanged.
+        """
+        if tsize is not None:
+            self.total = tsize
+        self.update(b * bsize - self.n)  # will also set self.n = b * bsize
+
+
+def ujipen_download(verbose=True):
     UJIPEN_DIR.mkdir(parents=True, exist_ok=True)
-    request = requests.get(UJIPEN_URL, stream=True)
-    total_size = int(request.headers.get('content-length', 0))
-    wrote_bytes = 0
-    with open(UJIPEN_TXT, 'wb') as f:
-        for data in tqdm(request.iter_content(chunk_size=1024), desc=f"Downloading {UJIPEN_URL}",
-                         total=total_size // 1024,
-                         unit='KB', unit_scale=True):
-            wrote_bytes += f.write(data)
-    if wrote_bytes != total_size:
-        warnings.warn("Content length mismatch. Try downloading again.")
+    desc = f"Downloading {UJIPEN_URL} to '{UJIPEN_TXT}'"
+    with TqdmUpTo(unit='B', unit_scale=True, unit_divisor=1024, miniters=1,
+                  desc=desc, disable=not verbose) as t:
+        urlretrieve(UJIPEN_URL, filename=UJIPEN_TXT, reporthook=t.update_to)
 
 
 def check_shapes(data):
@@ -126,3 +141,7 @@ def filter_alphabet(data, alphabet=string.ascii_lowercase):
         data[fold] = {
             word: data[fold][word] for word in alphabet
         }
+
+
+if __name__ == '__main__':
+    ujipen_download()
